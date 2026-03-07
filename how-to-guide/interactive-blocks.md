@@ -10,11 +10,11 @@ You can check the invoice status on your dashboard in SapphireDao. Invoices can 
 * **Paid** – Invoice has been paid by the buyer.
 * **Expired** – The invoice expired because it was not paid within the configured time window.
 * **Released** – Funds have been sent to the seller
-* **Disputed** - Buyer has raised a dispute after acceptance.
+* **Disputed** - Buyer has raised a dispute after payment.
 * **Dispute Resolved** - Dispute has been resolved in full favor of both parties.
 * **Dispute Dismissed** - Dispute has been dismissed without changes to payouts.
-* **Disputed Settled** - Dispute has been settled with a split payout.
-* **Cancelled** – Seller has cancelled the invoice before acceptance.
+* **Dispute Settled** - Dispute has been settled with a split payout.
+* **Canceled** – Invoice was canceled before payment.
 * **Refunded** – Funds have been refunded to the buyer (for example, after expiration or rejection).
 
 After the buyer makes payment, the invoice moves to Paid and the funds are held in an escrow contract. At this point, the invoice enters the release flow, since the contract automatically sets a release time and starts the release countdown. Before the funds are released, a dispute can be raised, which moves the invoice to Disputed and pauses the release process until the dispute is handled.

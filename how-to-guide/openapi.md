@@ -1,6 +1,6 @@
 # Handle Disputes
 
-Once the seller has approved an invoice, buyers can initiate a dispute before it is eligible for release. The outcome of the dispute could be:
+Once an invoice has been paid, buyers can initiate a dispute before it is eligible for release. The outcome of the dispute could be:
 
 • **Dismissed** – Payment continues as normal
 

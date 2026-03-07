@@ -51,12 +51,12 @@ Status code representing that a payment or transaction has been rejected.
 uint8 public constant REJECTED = ACCEPTED + 1
 ```
 
-#### CANCELLED
+#### CANCELED
 
-Status code representing that a payment or transaction has been cancelled.
+Status code representing that a payment or transaction has been canceled.
 
 ```solidity
-uint8 public constant CANCELLED = REJECTED + 1
+uint8 public constant CANCELED = REJECTED + 1
 ```
 
 #### REFUNDED
@@ -64,7 +64,7 @@ uint8 public constant CANCELLED = REJECTED + 1
 Status code representing that a payment has been refunded to the payer.
 
 ```solidity
-uint8 public constant REFUNDED = CANCELLED + 1
+uint8 public constant REFUNDED = CANCELED + 1
 ```
 
 #### RELEASED

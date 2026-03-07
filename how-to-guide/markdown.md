@@ -10,6 +10,7 @@ Track invoices on the dashboard’s Invoice List, where users can monitor status
 * **Expired** – The invoice expired because it was not paid within the configured time window.
 * **Paid** – The Buyer has sent the payment.
 * **Accepted** – Seller has accepted the payment.
+* **Rejected** – Seller explicitly rejected the payment; buyer receives a refund.
 * **Refunded** – Funds were returned from escrow to the buyer (for example, after rejection or no seller action within the allowed time).
 * **Released** – Funds have been released to the seller.
 * **Canceled** – The invoice was canceled.
