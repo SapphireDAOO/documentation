@@ -599,7 +599,7 @@ event InvoiceCreated(uint216 indexed invoiceId, Invoice invoice);
 ```
 
 | Name        | Type      | Description                        |
-| :---------- | :-------: | :--------------------------------- |
+| :----------: | :-------: | :---------------------------------: |
 | `invoiceId` | `uint216` | The ID of the newly created invoice. |
 | `invoice`   | `Invoice` | The invoice data.                  |
 
@@ -612,7 +612,7 @@ event MetaInvoiceCreated(uint216 indexed metaInvoiceId, uint256 indexed totalPri
 ```
 
 | Name            | Type      | Description                                                                        |
-| :-------------- | :-------: | :--------------------------------------------------------------------------------- |
+| :--------------: | :-------: | :---------------------------------------------------------------------------------: |
 | `metaInvoiceId` | `uint216` | The unique identifier of the newly created meta-invoice.                           |
 | `totalPrice`    | `uint256` | The aggregated total price (in USD, 8 decimals) of all sub-invoices. |
 
@@ -625,7 +625,7 @@ event InvoicePaid(uint216 indexed invoiceId, address paymentToken, address escro
 ```
 
 | Name            | Type      | Description                                                              |
-| :-------------- | :-------: | :----------------------------------------------------------------------- |
+| :--------------: | :-------: | :-----------------------------------------------------------------------: |
 | `invoiceId`     | `uint216` | The unique identifier of the paid invoice.                               |
 | `paymentToken`  | `address` | The address of the token used for payment (address(0) for native ETH).   |
 | `escrowAddress` | `address` | The address of the escrow contract created to hold the payment.          |
@@ -641,7 +641,7 @@ event PaymentReleased(uint216 indexed invoiceId, address receiver, address curre
 ```
 
 | Name           | Type      | Description                                                        |
-| :------------- | :-------: | :----------------------------------------------------------------- |
+| :-------------: | :-------: | :-----------------------------------------------------------------: |
 | `invoiceId`    | `uint216` | The unique identifier of the invoice.                              |
 | `receiver`     | `address` | The address that receives the released funds (typically the seller). |
 | `currency`     | `address` | The address of the token used for payment (address(0) for ETH).   |
@@ -656,7 +656,7 @@ event Refunded(uint216 indexed invoiceId, uint256 indexed amount);
 ```
 
 | Name        | Type      | Description                                    |
-| :---------- | :-------: | :--------------------------------------------- |
+| :----------: | :-------: | :---------------------------------------------: |
 | `invoiceId` | `uint216` | The unique identifier of the refunded order.   |
 | `amount`    | `uint256` | The amount refunded to the buyer.              |
 
@@ -669,7 +669,7 @@ event InvoiceCanceled(uint216 indexed invoiceId);
 ```
 
 | Name        | Type      | Description                     |
-| :---------- | :-------: | :------------------------------ |
+| :----------: | :-------: | :------------------------------: |
 | `invoiceId` | `uint216` | The ID of the canceled invoice. |
 
 #### DisputeCreated
@@ -681,7 +681,7 @@ event DisputeCreated(uint216 indexed invoiceId);
 ```
 
 | Name        | Type      | Description                        |
-| :---------- | :-------: | :--------------------------------- |
+| :----------: | :-------: | :---------------------------------: |
 | `invoiceId` | `uint216` | The ID of the disputed invoice.    |
 
 #### DisputeDismissed
@@ -693,7 +693,7 @@ event DisputeDismissed(uint216 indexed invoiceId);
 ```
 
 | Name        | Type      | Description                                          |
-| :---------- | :-------: | :--------------------------------------------------- |
+| :----------: | :-------: | :---------------------------------------------------: |
 | `invoiceId` | `uint216` | The ID of the invoice involved in the dispute.       |
 
 #### DisputeResolved
@@ -705,7 +705,7 @@ event DisputeResolved(uint216 indexed invoiceId);
 ```
 
 | Name        | Type      | Description                                    |
-| :---------- | :-------: | :--------------------------------------------- |
+| :----------: | :-------: | :---------------------------------------------: |
 | `invoiceId` | `uint216` | The ID of the invoice involved in the dispute. |
 
 #### DisputeSettled
@@ -717,7 +717,7 @@ event DisputeSettled(uint216 indexed invoiceId, uint256 sellerAmount, uint256 bu
 ```
 
 | Name           | Type      | Description                               |
-| :------------- | :-------: | :---------------------------------------- |
+| :-------------: | :-------: | :----------------------------------------: |
 | `invoiceId`    | `uint216` | The ID of the invoice that was disputed.  |
 | `sellerAmount` | `uint256` | The amount transferred to the seller.     |
 | `buyerAmount`  | `uint256` | The amount refunded to the buyer.         |
@@ -731,14 +731,14 @@ event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
 ```
 
 | Name            | Type      | Description                                                        |
-| :-------------- | :-------: | :----------------------------------------------------------------- |
+| :--------------: | :-------: | :-----------------------------------------------------------------: |
 | `invoiceId`     | `uint216` | The unique identifier of the invoice whose release time was modified. |
 | `newHoldPeriod` | `uint256` | The updated escrow hold duration in seconds.                       |
 
 ### Errors
 
 | Error | Description |
-| :---- | :---------- |
+| :----: | :----------: |
 | `UnsupportedToken()` | Thrown when a payment is attempted with a token not supported by the processor. |
 | `InvoiceExpired()` | Thrown when a payment is attempted on an invoice that has passed its expiry timestamp. |
 | `EmptyMetaInvoice()` | Thrown when a meta-invoice is created with an empty sub-invoice list. |

@@ -70,12 +70,12 @@ event FundsDeposited(uint216 indexed invoiceId, uint256 indexed value);
 ```
 
 | Name        |   Type    | Description                                                |
-| :---------- | :-------: | :--------------------------------------------------------- |
+| :----------: | :-------: | :---------------------------------------------------------: |
 | `invoiceId` | `uint216` | The unique key of the invoice associated with the deposit. |
 | `value`     | `uint256` | The amount of funds deposited in wei.                      |
 
 ### Errors
 
 | Error            | Description                                                                  |
-| :--------------- | :--------------------------------------------------------------------------- |
+| :---------------: | :---------------------------------------------------------------------------: |
 | `Unauthorized()` | Thrown when an unauthorized address attempts to perform a restricted action. |

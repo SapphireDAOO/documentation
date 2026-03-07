@@ -225,7 +225,7 @@ struct Note {
 ```
 
 | Field     | Type      | Description                                      |
-| :-------- | :-------: | :----------------------------------------------- |
+| :--------: | :-------: | :-----------------------------------------------: |
 | `author`  | `address` | The note author.                                 |
 | `share`   | `bool`    | Whether the note is shared with the other party. |
 | `exists`  | `bool`    | Whether the note exists.                         |
@@ -243,7 +243,7 @@ event NoteCreated(uint216 indexed invoiceId, uint256 indexed noteId, address ind
 ```
 
 | Name               | Type      | Description                                                   |
-| :----------------- | :-------: | :------------------------------------------------------------ |
+| :-----------------: | :-------: | :------------------------------------------------------------: |
 | `invoiceId`        | `uint216` | The unique identifier of the invoice the note is associated with. |
 | `noteId`           | `uint256` | The unique identifier of the created note.                    |
 | `author`           | `address` | The address of the account that created the note.             |
@@ -259,7 +259,7 @@ event NoteStateChanged(uint216 indexed invoiceId, uint256 indexed noteId, addres
 ```
 
 | Name        | Type      | Description                                                       |
-| :---------- | :-------: | :---------------------------------------------------------------- |
+| :----------: | :-------: | :----------------------------------------------------------------: |
 | `invoiceId` | `uint216` | The unique identifier of the invoice the note belongs to.         |
 | `noteId`    | `uint256` | The unique identifier of the note.                                |
 | `user`      | `address` | The address of the user whose note state was updated.             |
@@ -268,7 +268,7 @@ event NoteStateChanged(uint216 indexed invoiceId, uint256 indexed noteId, addres
 ### Errors
 
 | Error | Description |
-| :---- | :---------- |
+| :----: | :----------: |
 | `Unauthorized()` | Thrown when the caller is not authorized to access the note. |
 | `EmptyContent()` | Thrown when creating a note with empty content. |
 | `NoteNotFound()` | Thrown when the requested note does not exist. |

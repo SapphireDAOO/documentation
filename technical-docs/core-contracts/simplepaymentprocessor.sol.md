@@ -465,7 +465,7 @@ event InvoiceCreated(uint216 indexed invoiceId, Invoice invoice);
 ```
 
 | Name        | Type      | Description                                                                          |
-| :---------- | :-------: | :----------------------------------------------------------------------------------- |
+| :----------: | :-------: | :-----------------------------------------------------------------------------------: |
 | `invoiceId` | `uint216` | The unique identifier for the created invoice.                                       |
 | `invoice`   | `Invoice` | The full invoice struct containing buyer, price, timestamps, state, and metadata.    |
 
@@ -478,7 +478,7 @@ event InvoicePaid(uint216 indexed invoiceId, address indexed buyer, uint256 inde
 ```
 
 | Name        | Type      | Description                                                                                         |
-| :---------- | :-------: | :-------------------------------------------------------------------------------------------------- |
+| :----------: | :-------: | :--------------------------------------------------------------------------------------------------: |
 | `invoiceId` | `uint216` | The unique ID of the paid invoice.                                                                  |
 | `buyer`     | `address` | The address of the buyer who paid.                                                                  |
 | `amountPaid`| `uint256` | The amount paid towards the invoice in wei.                                                         |
@@ -493,7 +493,7 @@ event InvoiceRejected(uint216 indexed invoiceId);
 ```
 
 | Name        | Type      | Description                             |
-| :---------- | :-------: | :-------------------------------------- |
+| :----------: | :-------: | :--------------------------------------: |
 | `invoiceId` | `uint216` | The unique ID of the rejected invoice.  |
 
 #### InvoiceRefunded
@@ -505,7 +505,7 @@ event InvoiceRefunded(uint216 indexed invoiceId);
 ```
 
 | Name        | Type      | Description                             |
-| :---------- | :-------: | :-------------------------------------- |
+| :----------: | :-------: | :--------------------------------------: |
 | `invoiceId` | `uint216` | The unique ID of the refunded invoice.  |
 
 #### InvoiceAccepted
@@ -517,7 +517,7 @@ event InvoiceAccepted(uint216 indexed invoiceId);
 ```
 
 | Name        | Type      | Description                             |
-| :---------- | :-------: | :-------------------------------------- |
+| :----------: | :-------: | :--------------------------------------: |
 | `invoiceId` | `uint216` | The unique ID of the accepted invoice.  |
 
 #### InvoiceCanceled
@@ -529,7 +529,7 @@ event InvoiceCanceled(uint216 indexed invoiceId);
 ```
 
 | Name        | Type      | Description                             |
-| :---------- | :-------: | :-------------------------------------- |
+| :----------: | :-------: | :--------------------------------------: |
 | `invoiceId` | `uint216` | The unique ID of the canceled invoice.  |
 
 #### InvoiceReleased
@@ -541,7 +541,7 @@ event InvoiceReleased(uint216 indexed invoiceId);
 ```
 
 | Name        | Type      | Description                             |
-| :---------- | :-------: | :-------------------------------------- |
+| :----------: | :-------: | :--------------------------------------: |
 | `invoiceId` | `uint216` | The unique ID of the released invoice.  |
 
 #### UpdateHoldPeriod
@@ -553,14 +553,14 @@ event UpdateHoldPeriod(uint216 indexed invoiceId, uint256 indexed releaseDueTime
 ```
 
 | Name                   | Type      | Description                                                  |
-| :--------------------- | :-------: | :----------------------------------------------------------- |
+| :---------------------: | :-------: | :-----------------------------------------------------------: |
 | `invoiceId`            | `uint216` | The key of the invoice whose hold period was updated.        |
 | `releaseDueTimestamp`  | `uint256` | The new hold period expressed as a UNIX timestamp.           |
 
 ### Errors
 
 | Error | Description |
-| :---- | :---------- |
+| :----: | :----------: |
 | `NotAuthorized()` | Thrown when the caller lacks the required role or permission. |
 | `ValueIsTooLow()` | Thrown when the provided value is lower than the required minimum. |
 | `InvalidHeapPosition()` | Thrown when a task's heap index is invalid. |
