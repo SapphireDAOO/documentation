@@ -1,0 +1,11 @@
+# Core Contracts
+
+List of  core contracts
+
+| Contracts                                                       | Description                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md)   | It is an ownable smart contract that acts as the persistent state and configuration layer for the payment processing system. It manages global parameters such as the next invoice ID, fee settings, hold periods, gas thresholds, and authorized addresses. |
+| [SimplePaymentProcessor.sol](simplepaymentprocessor.sol.md)     | Enables sellers to create invoices, buyers to pay through escrow and funds to be securely released or refunded based on transaction state.                                                                                                                   |
+| [AdvancedPaymentProcessor.sol](advancedpaymentprocessor.sol.md) | Manages single and meta-invoices with escrow, dispute resolution, ERC20/native token support and marketplace-controlled operations.                                                                                                                          |
+| [Escrow.sol](escrow.sol.md)                                     | This contract is an escrow used by a payment processor to securely hold funds for a specific invoice. It supports ETH or token withdrawals authorized only by the payment processor.                                                                         |
+| [Notes.sol](notes.sol.md)                                       | This contract stores encrypted order notes and tracks per-user opened state for SapphireDao payment flows                                                                                                                                                    |
