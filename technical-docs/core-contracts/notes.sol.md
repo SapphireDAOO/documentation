@@ -11,7 +11,7 @@ Notes.sol enables:
 
 Contract Address: [0xbe210c16e990e74a92eb85060bb33eb03418c565](https://sepolia.etherscan.io/address/0xbe210c16e990e74a92eb85060bb33eb03418c565)
 
-You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/v2/src/AdvancedPaymentProcessor.sol)
+You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/v2/src/Notes.sol)
 
 ### State Variables
 
@@ -31,14 +31,6 @@ Authorization flag indicating access is granted.
 uint256 public constant ALLOWED = 1
 ```
 
-#### currentVersion
-
-Active note encryption version used for newly created notes.
-
-```solidity
-uint8 private currentVersion
-```
-
 #### ppStorage
 
 Reference to the external Payment Processor storage contract.
@@ -47,57 +39,7 @@ Reference to the external Payment Processor storage contract.
 IPaymentProcessorStorage public immutable ppStorage
 ```
 
-#### notes
-
-Stores notes per order.
-
-invoiceId => noteId => Note data
-
-```solidity
-mapping(uint216 invoiceId => mapping(uint256 noteId => Note note)) private notes
-```
-
-#### noteCount
-
-Tracks the total number of notes created for each order.
-
-Used to assign incremental noteIds per order
-
-```solidity
-mapping(uint216 invoiceId => uint256 totalNotes) private noteCount
-```
-
-#### opened
-
-Tracks whether a user has opened a specific note.
-
-invoiceId => noteId => user => opened status
-
-```solidity
-mapping(uint216 invoiceId => mapping(uint256 noteId => mapping(address user => bool isOpened))) private opened
-```
-
-#### auth
-
-Tracks which addresses are allowed to create notes.
-
-Address => ALLOWED/NOT\_ALLOWED flag.
-
-```solidity
-mapping(address => uint256) private auth
-```
-
 ### Functions
-
-#### onlyAuthorized
-
-Restricts access to authorized callers.
-
-Reverts with Unauthorized if the caller is not allowed.
-
-```solidity
-modifier onlyAuthorized() ;
-```
 
 #### constructor
 
@@ -142,35 +84,22 @@ function createNote(uint216 _invoiceId, address _author, bytes calldata _encrypt
 
 #### setOpened
 
-Mark a note as opened or unopened for the caller.
+Mark a note as opened or unopened for an account.
+
+Only authorized callers can update opened state. Reverts with Unauthorized if the note is not shared — opened state can only be tracked for shared notes.
 
 ```solidity
-function setOpened(uint216 _invoiceId, uint256 _noteId, bool _open) external override onlyAuthorized;
+function setOpened(uint216 _invoiceId, address _account, uint256 _noteId, bool _open) external;
 ```
 
 **Parameters**
 
-|     Name     |    Type   |            Description           |
-| :----------: | :-------: | :------------------------------: |
-| `_invoiceId` | `uint216` |         Order identifier.        |
-|   `_noteId`  | `uint256` |         Note identifier.         |
-|    `_open`   |   `bool`  | New opened state for the caller. |
-
-#### \_setOpened
-
-Updates the opened state for a note.
-
-```solidity
-function _setOpened(uint216 _invoiceId, uint256 _noteId, bool _open) internal;
-```
-
-**Parameters**
-
-|     Name     |    Type   |            Description           |
-| :----------: | :-------: | :------------------------------: |
-| `_invoiceId` | `uint216` |         Order identifier.        |
-|   `_noteId`  | `uint256` |         Note identifier.         |
-|    `_open`   |   `bool`  | New opened state for the caller. |
+|     Name     |    Type   |                   Description                   |
+| :----------: | :-------: | :---------------------------------------------: |
+| `_invoiceId` | `uint216` | Invoice identifier.                             |
+| `_account`   | `address` | Account whose opened state is updated.          |
+|   `_noteId`  | `uint256` | Note identifier.                                |
+|    `_open`   |   `bool`  | New opened state for the account.               |
 
 #### getNoteCount
 
@@ -240,7 +169,7 @@ function getNote(uint216 _invoiceId, uint256 _noteId)
 |     `share`    |   `bool`  |       Whether the note is shared.       |
 |    `content`   |  `bytes`  |         Encrypted note content.         |
 | `openedStatus` |   `bool`  | Whether the caller has opened the note. |
-|    `version`   |  `uint8`  |                                         |
+|    `version`   |  `uint8`  |            Note schema version.         |
 
 #### updateVersion
 
@@ -279,29 +208,67 @@ function setAuthorized(address _user, bool _enabled) external;
 function getCurrentVersion() external view returns (uint8 v);
 ```
 
-#### \_owner
+### Structs
 
-Returns the owner of the PaymentProcessorStorage contract.
+#### Note
 
-This helper reads the owner directly from the linked PaymentProcessorStorage instance.
-
-```solidity
-function _owner() internal view returns (address ownerAddress);
-```
-
-**Returns**
-
-|      Name      |    Type   |                              Description                              |
-| :------------: | :-------: | :-------------------------------------------------------------------: |
-| `ownerAddress` | `address` | The address that currently owns the PaymentProcessorStorage contract. |
-
-#### \_isAuthorized
-
-Validates that the caller is authorized.
-
-Reverts with Unauthorized if the caller is not allowed.
+Stored note data.
 
 ```solidity
-function _isAuthorized() internal view;
+struct Note {
+    address author;
+    bool share;
+    bool exists;
+    uint8 version;
+    bytes content;
+}
 ```
 
+| Field     | Type      | Description                                      |
+| :-------- | :-------: | :----------------------------------------------- |
+| `author`  | `address` | The note author.                                 |
+| `share`   | `bool`    | Whether the note is shared with the other party. |
+| `exists`  | `bool`    | Whether the note exists.                         |
+| `version` | `uint8`   | The note schema version.                         |
+| `content` | `bytes`   | The encrypted note content.                      |
+
+### Events
+
+#### NoteCreated
+
+Emitted when a new note is created for an invoice.
+
+```solidity
+event NoteCreated(uint216 indexed invoiceId, uint256 indexed noteId, address indexed author, bool share, bytes encryptedContent);
+```
+
+| Name               | Type      | Description                                                   |
+| :----------------- | :-------: | :------------------------------------------------------------ |
+| `invoiceId`        | `uint216` | The unique identifier of the invoice the note is associated with. |
+| `noteId`           | `uint256` | The unique identifier of the created note.                    |
+| `author`           | `address` | The address of the account that created the note.             |
+| `share`            | `bool`    | Indicates whether the note is shared with other parties.      |
+| `encryptedContent` | `bytes`   | The encrypted contents of the note.                           |
+
+#### NoteStateChanged
+
+Emitted when a user changes their opened state for a note.
+
+```solidity
+event NoteStateChanged(uint216 indexed invoiceId, uint256 indexed noteId, address indexed user, bool opened);
+```
+
+| Name        | Type      | Description                                                       |
+| :---------- | :-------: | :---------------------------------------------------------------- |
+| `invoiceId` | `uint216` | The unique identifier of the invoice the note belongs to.         |
+| `noteId`    | `uint256` | The unique identifier of the note.                                |
+| `user`      | `address` | The address of the user whose note state was updated.             |
+| `opened`    | `bool`    | Whether the note is marked as opened or not by the user.          |
+
+### Errors
+
+| Error | Description |
+| :---- | :---------- |
+| `Unauthorized()` | Thrown when the caller is not authorized to access the note. |
+| `EmptyContent()` | Thrown when creating a note with empty content. |
+| `NoteNotFound()` | Thrown when the requested note does not exist. |

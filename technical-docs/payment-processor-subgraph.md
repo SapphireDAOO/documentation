@@ -28,7 +28,7 @@ This subgraph indexes three Sapphire DAO smart contracts deployed on the Sepolia
 * **Start block:** `9905398`
 * **Handler file:** `src/simple-payment-processor.ts`
 
-<table><thead><tr><th width="350.41015625" align="center">Event</th><th align="center">Handler</th><th align="center">Description</th></tr></thead><tbody><tr><td align="center"><code>InvoiceCreated(orderId, invalidateAt, invoice)</code></td><td align="center"><code>handleInvoiceCreated</code></td><td align="center">Creates the <code>SimplePaymentProcessor</code> entity and registers an <code>InvoiceType</code></td></tr><tr><td align="center"><code>InvoicePaid(orderId, buyer, amountPaid, expiresAt)</code></td><td align="center"><code>handleInvoicePaid</code></td><td align="center">Records buyer, amount paid, and payment tx hash</td></tr><tr><td align="center"><code>InvoiceAccepted(orderId)</code></td><td align="center"><code>handleInvoiceAccepted</code></td><td align="center">Sets the release timestamp and calculates the protocol fee</td></tr><tr><td align="center"><code>InvoiceCanceled(orderId)</code></td><td align="center"><code>handleInvoiceCanceled</code></td><td align="center">Marks the invoice as <code>CANCELED</code></td></tr><tr><td align="center"><code>InvoiceRejected(orderId)</code></td><td align="center"><code>handleInvoiceRejected</code></td><td align="center">Marks the invoice as <code>REJECTED</code> and records the refund tx</td></tr><tr><td align="center"><code>InvoiceRefunded(orderId)</code></td><td align="center"><code>handleInvoiceRefunded</code></td><td align="center">Marks the invoice as <code>REFUNDED</code></td></tr><tr><td align="center"><code>InvoiceReleased(orderId)</code></td><td align="center"><code>handleInvoiceReleased</code></td><td align="center">Marks the invoice as <code>RELEASED</code> and records the release tx</td></tr><tr><td align="center"><code>UpdateHoldPeriod(orderId, releaseDueTimestamp)</code></td><td align="center"><code>handleHoldPeriod</code></td><td align="center">Updates the <code>releasedAt</code> timestamp</td></tr></tbody></table>
+<table><thead><tr><th width="350.41015625" align="center">Event</th><th align="center">Handler</th><th align="center">Description</th></tr></thead><tbody><tr><td align="center"><code>InvoiceCreated(invoiceId, invalidateAt, invoice)</code></td><td align="center"><code>handleInvoiceCreated</code></td><td align="center">Creates the <code>SimplePaymentProcessor</code> entity and registers an <code>InvoiceType</code></td></tr><tr><td align="center"><code>InvoicePaid(invoiceId, buyer, amountPaid, expiresAt)</code></td><td align="center"><code>handleInvoicePaid</code></td><td align="center">Records buyer, amount paid, and payment tx hash</td></tr><tr><td align="center"><code>InvoiceAccepted(invoiceId)</code></td><td align="center"><code>handleInvoiceAccepted</code></td><td align="center">Sets the release timestamp and calculates the protocol fee</td></tr><tr><td align="center"><code>InvoiceCanceled(invoiceId)</code></td><td align="center"><code>handleInvoiceCanceled</code></td><td align="center">Marks the invoice as <code>CANCELED</code></td></tr><tr><td align="center"><code>InvoiceRejected(invoiceId)</code></td><td align="center"><code>handleInvoiceRejected</code></td><td align="center">Marks the invoice as <code>REJECTED</code> and records the refund tx</td></tr><tr><td align="center"><code>InvoiceRefunded(invoiceId)</code></td><td align="center"><code>handleInvoiceRefunded</code></td><td align="center">Marks the invoice as <code>REFUNDED</code></td></tr><tr><td align="center"><code>InvoiceReleased(invoiceId)</code></td><td align="center"><code>handleInvoiceReleased</code></td><td align="center">Marks the invoice as <code>RELEASED</code> and records the release tx</td></tr><tr><td align="center"><code>UpdateHoldPeriod(invoiceId, releaseDueTimestamp)</code></td><td align="center"><code>handleHoldPeriod</code></td><td align="center">Updates the <code>releasedAt</code> timestamp</td></tr></tbody></table>
 
 #### AdvancedPaymentProcessor
 
@@ -36,20 +36,20 @@ This subgraph indexes three Sapphire DAO smart contracts deployed on the Sepolia
 * **Start block:** `9905398`
 * **Handler file:** `src/advanced-payment-processor.ts`
 
-|                         Event / Call                        |                 Handler                 |                                  Description                                  |
-| :---------------------------------------------------------: | :-------------------------------------: | :---------------------------------------------------------------------------: |
-|              `InvoiceCreated(orderId, invoice)`             | `handleAdvancedPaymentProcessorCreated` | Creates `AdvancedPaymentProcessor`, `AdminAction`, and `InvoiceType` entities |
-| `InvoicePaid(orderId, paymentToken, escrowAddress, amount)` |           `handleInvoicePaid`           |           Records payment details, escrow address, and computes fee           |
-|                  `InvoiceCanceled(orderId)`                 |         `handleInvoiceCanceled`         |                          Marks invoice as `CANCELED`                          |
-|                  `DisputeCreated(orderId)`                  |          `handleDisputeCreated`         |                          Marks invoice as `DISPUTED`                          |
-|                 `DisputeDismissed(orderId)`                 |         `handleDisputeDismissed`        |                      Marks invoice as `DISPUTE DISMISSED`                     |
-|                  `DisputeResolved(orderId)`                 |         `handleDisputeResolved`         |                      Marks invoice as `DISPUTE RESOLVED`                      |
-|     `DisputeSettled(orderId, sellerAmount, buyerAmount)`    |          `handleDisputeSettled`         |           Marks invoice as `DISPUTE SETTLED`, records commission tx           |
-|       `MetaInvoiceCreated(metaInvoiceId, totalPrice)`       |        `handleMetaInvoiceCreated`       |                         Creates a `MetaInvoice` entity                        |
-|           `PaymentReleased(orderId, sellerAmount)`          |         `handlePaymentReleased`         |                  Marks invoice as `RELEASED`, zeroes balance                  |
-|                 `Refunded(orderId, amount)`                 |             `handleRefunded`            |         Reduces balance; state becomes `REFUNDED` or `PARTIAL REFUND`         |
-|         `UpdateReleaseTime(orderId, newHoldPeriod)`         |        `handleUpdateReleaseTime`        |                         Extends the escrow hold period                        |
-|           `setPriceFeed(token, aggregator)` (call)          |          `handleAllowedTokens`          |                   Creates or updates a `PaymentToken` entity                  |
+|                              Event / Call                              |                 Handler                 |                                  Description                                  |
+| :--------------------------------------------------------------------: | :-------------------------------------: | :---------------------------------------------------------------------------: |
+|                    `InvoiceCreated(invoiceId, invoice)`                | `handleAdvancedPaymentProcessorCreated` | Creates `AdvancedPaymentProcessor`, `AdminAction`, and `InvoiceType` entities |
+| `InvoicePaid(invoiceId, paymentToken, escrowAddress, amount, releaseAt)` |           `handleInvoicePaid`           |           Records payment details, escrow address, and computes fee           |
+|                       `InvoiceCanceled(invoiceId)`                     |         `handleInvoiceCanceled`         |                          Marks invoice as `CANCELED`                          |
+|                        `DisputeCreated(invoiceId)`                     |          `handleDisputeCreated`         |                          Marks invoice as `DISPUTED`                          |
+|                       `DisputeDismissed(invoiceId)`                    |         `handleDisputeDismissed`        |                      Marks invoice as `DISPUTE DISMISSED`                     |
+|                       `DisputeResolved(invoiceId)`                     |         `handleDisputeResolved`         |                      Marks invoice as `DISPUTE RESOLVED`                      |
+|         `DisputeSettled(invoiceId, sellerAmount, buyerAmount)`         |          `handleDisputeSettled`         |           Marks invoice as `DISPUTE SETTLED`, records commission tx           |
+|              `MetaInvoiceCreated(metaInvoiceId, totalPrice)`           |        `handleMetaInvoiceCreated`       |                         Creates a `MetaInvoice` entity                        |
+|     `PaymentReleased(invoiceId, receiver, currency, sellerAmount)`     |         `handlePaymentReleased`         |                  Marks invoice as `RELEASED`, zeroes balance                  |
+|                        `Refunded(invoiceId, amount)`                   |             `handleRefunded`            |         Reduces balance; state becomes `REFUNDED` or `PARTIAL REFUND`         |
+|                `UpdateReleaseTime(invoiceId, newHoldPeriod)`           |        `handleUpdateReleaseTime`        |                         Extends the escrow hold period                        |
+|                  `setPriceFeed(token, aggregator)` (call)              |          `handleAllowedTokens`          |                   Creates or updates a `PaymentToken` entity                  |
 
 #### Notes
 
@@ -59,8 +59,8 @@ This subgraph indexes three Sapphire DAO smart contracts deployed on the Sepolia
 
 |                              Event                              |          Handler         |                 Description                 |
 | :-------------------------------------------------------------: | :----------------------: | :-----------------------------------------: |
-| `NoteCreated(orderId, noteId, author, share, encryptedContent)` |    `handleNoteCreated`   |           Creates a `Note` entity           |
-|        `NoteStateChanged(orderId, noteId, user, opened)`        | `handleNoteStateChanged` | Creates or updates a `NoteOpenState` entity |
+| `NoteCreated(invoiceId, noteId, author, share, encryptedContent)` |    `handleNoteCreated`   |           Creates a `Note` entity           |
+|        `NoteStateChanged(invoiceId, noteId, user, opened)`        | `handleNoteStateChanged` | Creates or updates a `NoteOpenState` entity |
 
 ***
 
@@ -68,12 +68,12 @@ This subgraph indexes three Sapphire DAO smart contracts deployed on the Sepolia
 
 #### `SimplePaymentProcessor`
 
-Represents one invoice on the SimplePaymentProcessor contract. The entity `id` is the on-chain `orderId` as a string.
+Represents one invoice on the SimplePaymentProcessor contract. The entity `id` is the on-chain `invoiceId` as a string.
 
 |        Field       |     Type     |                                Description                               |
 | :----------------: | :----------: | :----------------------------------------------------------------------: |
 |        `id`        |     `ID!`    |                   On-chain Invoice ID (numeric string)                   |
-|     `invoiceId`    |   `String`   |         Internal invoice identifier encoded in the invoice struct        |
+|   `invoiceNonce`   |   `String`   |         Internal invoice nonce encoded in the invoice struct             |
 |       `state`      |   `String`   |                Current lifecycle state (see State Machine)               |
 |      `seller`      |    `User`    |               Address of the seller who created the invoice              |
 |       `buyer`      |    `User`    |              Address of the buyer who paid (null until paid)             |
@@ -101,12 +101,12 @@ Represents one invoice on the SimplePaymentProcessor contract. The entity `id` i
 
 #### `AdvancedPaymentProcessor`
 
-Represents one invoice on the AdvancedPaymentProcessor contract. Supports multi-token payments and dispute resolution. The `id` is the on-chain `orderId`.
+Represents one invoice on the AdvancedPaymentProcessor contract. Supports multi-token payments and dispute resolution. The `id` is the on-chain `invoiceId`.
 
 |        Field       |      Type      |                                      Description                                     |
 | :----------------: | :------------: | :----------------------------------------------------------------------------------: |
 |        `id`        |      `ID!`     |                         On-chain Invoice ID (numeric string)                         |
-|     `invoiceId`    |    `String`    |                  Internal invoice identifier from the invoice struct                 |
+|   `invoiceNonce`   |    `String`    |                  Internal invoice nonce from the invoice struct                      |
 |       `state`      |    `String`    |                      Current lifecycle state (see State Machine)                     |
 |      `seller`      |     `User`     |                                    Seller address                                    |
 |       `buyer`      |     `User`     |                            Buyer address (null until paid)                           |
@@ -120,8 +120,6 @@ Represents one invoice on the AdvancedPaymentProcessor contract. Supports multi-
 |     `createdAt`    |    `BigInt`    |                              Block timestamp of creation                             |
 |      `paidAt`      |    `BigInt`    |                              Block timestamp of payment                              |
 |    `releasedAt`    |    `BigInt`    |     Timestamp after which funds can be released (updated on `UpdateReleaseTime`)     |
-|   `invalidateAt`   |    `BigInt`    |                               Invoice expiry timestamp                               |
-|     `expiresAt`    |    `BigInt`    |                              Buyer payment window expiry                             |
 |  `creationTxHash`  |    `String`    |                             Transaction hash of creation                             |
 |   `paymentTxHash`  |     `Bytes`    |                              Transaction hash of payment                             |
 | `commissionTxHash` |     `Bytes`    |     Transaction hash of release or dispute settlement (when commission is taken)     |
@@ -166,12 +164,12 @@ Represents a unique wallet address that has interacted with either processor. Th
 
 #### `AdminAction`
 
-A log entry recording the most recent admin-level action on an order. One entity per order (same `id` as the order). Updated in-place as state changes.
+A log entry recording the most recent admin-level action on an invoice. One entity per invoice (same `id` as the invoice). Updated in-place as state changes.
 
 |    Field    |      Type      |                              Description                              |
 | :---------: | :------------: | :-------------------------------------------------------------------: |
-|     `id`    |      `ID!`     |                          Same as the order ID                         |
-| `invoiceId` |    `String`    |                      Internal invoice identifier                      |
+|      `id`      |      `ID!`     |                          Same as the order ID                         |
+| `invoiceNonce` |    `String`    |                      Internal invoice nonce                           |
 |   `action`  |    `String`    | The most recent action performed (e.g. `CREATED`, `PAID`, `CANCELED`) |
 |  `category` |    `String`    |               Type of order: `INVOICE` or `META INVOICE`              |
 |    `time`   |    `BigInt`    |                         Timestamp of creation                         |
@@ -206,12 +204,12 @@ Records whether an order ID belongs to a `SimplePaymentProcessor` or `AdvancedPa
 
 #### `Note`
 
-An encrypted note attached to a specific order. The `id` is `{orderId}-{noteId}`.
+An encrypted note attached to a specific order. The `id` is `{invoiceId}-{noteId}`.
 
 |        Field       |    Type    |                    Description                   |
 | :----------------: | :--------: | :----------------------------------------------: |
-|        `id`        |    `ID!`   |       Composite key: `{InvoiceId}-{noteId}`      |
-|      `orderId`     |  `BigInt!` |          The order this note belongs to          |
+|        `id`        |    `ID!`   |       Composite key: `{invoiceId}-{noteId}`      |
+|     `invoiceId`    |  `BigInt!` |          The invoice this note belongs to        |
 |      `noteId`      |  `BigInt!` |      Sequential note index within the order      |
 |      `author`      |  `Bytes!`  |            Address of the note author            |
 |       `share`      | `Boolean!` | Whether the note is shared with the counterparty |
@@ -223,12 +221,12 @@ An encrypted note attached to a specific order. The `id` is `{orderId}-{noteId}`
 
 #### `NoteOpenState`
 
-Tracks whether a given user has opened a specific note. The `id` is `{orderId}-{noteId}-{userAddress}`.
+Tracks whether a given user has opened a specific note. The `id` is `{invoiceId}-{noteId}-{userAddress}`.
 
-|       Field      |    Type    |                  Description                  |
-| :--------------: | :--------: | :-------------------------------------------: |
-|       `id`       |    `ID!`   | Composite key: `{orderId}-{noteId}-{address}` |
-|     `orderId`    |  `BigInt!` |         The order this note belongs to        |
+|       Field      |    Type    |                    Description                    |
+| :--------------: | :--------: | :-----------------------------------------------: |
+|       `id`       |    `ID!`   | Composite key: `{invoiceId}-{noteId}-{address}`   |
+|    `invoiceId`   |  `BigInt!` |         The invoice this note belongs to          |
 |     `noteId`     |  `BigInt!` |                 The note index                |
 |      `user`      |  `Bytes!`  |     The user whose open state is recorded     |
 |     `opened`     | `Boolean!` |      Whether the user has opened the note     |
@@ -344,7 +342,7 @@ All queries run against the API endpoint: `https://api.studio.thegraph.com/query
     orderDirection: desc
   ) {
     id
-    invoiceId
+    invoiceNonce
     seller {
       id
     }
@@ -373,7 +371,7 @@ All queries run against the API endpoint: `https://api.studio.thegraph.com/query
     where: { category: "INVOICE" }
   ) {
     id
-    invoiceId
+    invoiceNonce
     action
     category
     txHash
@@ -405,7 +403,7 @@ All queries run against the API endpoint: `https://api.studio.thegraph.com/query
 
 ```graphql
 {
-  notes(where: { orderId: "7" }, orderBy: noteId) {
+  notes(where: { invoiceId: 7 }, orderBy: noteId) {
     id
     noteId
     author
@@ -423,7 +421,7 @@ All queries run against the API endpoint: `https://api.studio.thegraph.com/query
 {
   noteOpenStates(where: { user: "0xabc123..." }) {
     id
-    orderId
+    invoiceId
     noteId
     opened
     updatedAtBlock

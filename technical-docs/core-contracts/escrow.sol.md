@@ -4,23 +4,7 @@ This contract holds the amount of value sent by the payer. It is created by the 
 
 ### State Variables
 
-#### BUYER
-
-The address of the buyer associated with this escrow.
-
-```solidity
-address public immutable BUYER
-```
-
-#### SELLER
-
-The address of the seller associated with this escrow.
-
-```solidity
-address public immutable SELLER
-```
-
-#### PAYMENT\_PROCESSOR
+#### PAYMENT_PROCESSOR
 
 The address of the payment processor.
 
@@ -28,7 +12,7 @@ The address of the payment processor.
 address public immutable PAYMENT_PROCESSOR
 ```
 
-#### INVOICE
+#### INVOICE_ID
 
 The invoice ID associated with the escrow.
 
@@ -37,16 +21,6 @@ uint256 public immutable INVOICE
 ```
 
 ### Functions
-
-#### onlyPaymentProcessor
-
-Restricts access to the payment processor contract.
-
-Reverts with Unauthorized if the caller is not the payment processor.
-
-```solidity
-modifier onlyPaymentProcessor() ;
-```
 
 #### constructor
 
@@ -60,7 +34,7 @@ constructor(uint216 _invoiceId, address _creator, address _payer, address _payme
 
 **Parameters**
 
-|            Name            |    Type   |                             Description                             |
+|            Name            |   Type    |                             Description                             |
 | :------------------------: | :-------: | :-----------------------------------------------------------------: |
 |        `_invoiceId`        | `uint216` |  The unique identifier of the invoice associated with this escrow.  |
 |         `_creator`         | `address` |                 The address of the invoice creator.                 |
@@ -74,23 +48,34 @@ Withdraws ETH or ERC20 tokens from the escrow contract to a specified receiver.
 Only callable by the payment processor. Transfers ETH if `token` is the zero address, otherwise transfers ERC20 tokens.
 
 ```solidity
-function withdraw(address _token, address _receiver, uint256 _amount) external onlyPaymentProcessor;
+function withdraw(address _token, address _receiver, uint256 _amount) external;
 ```
 
 **Parameters**
 
-|     Name    |    Type   |                           Description                          |
+|    Name     |   Type    |                          Description                           |
 | :---------: | :-------: | :------------------------------------------------------------: |
-|   `_token`  | `address` | The address of the token to withdraw (use address(0) for ETH). |
+|  `_token`   | `address` | The address of the token to withdraw (use address(0) for ETH). |
 | `_receiver` | `address` |         The address that receives the withdrawn funds.         |
 |  `_amount`  | `uint256` |            The amount of ETH or tokens to transfer.            |
 
-#### \_onlyPaymentProcessor
+### Events
 
-Ensures that the caller is the authorized payment processor.
+#### FundsDeposited
 
-Reverts with `Unauthorized` if `msg.sender` is not equal to `paymentProcessor`.
+Emitted when funds are deposited into the escrow for an invoice.
 
 ```solidity
-function _onlyPaymentProcessor() internal view;
+event FundsDeposited(uint216 indexed invoiceId, uint256 indexed value);
 ```
+
+| Name        |   Type    | Description                                                |
+| :---------- | :-------: | :--------------------------------------------------------- |
+| `invoiceId` | `uint216` | The unique key of the invoice associated with the deposit. |
+| `value`     | `uint256` | The amount of funds deposited in wei.                      |
+
+### Errors
+
+| Error            | Description                                                                  |
+| :--------------- | :--------------------------------------------------------------------------- |
+| `Unauthorized()` | Thrown when an unauthorized address attempts to perform a restricted action. |

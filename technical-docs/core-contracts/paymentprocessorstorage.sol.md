@@ -11,7 +11,7 @@ PaymentProcessorStorage.sol enables:
 * Sequential invoice ID management
 * System-wide configuration for fees, hold periods, and gas thresholds
 * Access control for privileged contract calls
-* State-sharing across other contracts in the SapphireDao ecosystemState VariablesState Variables
+* State-sharing across other contracts in the SapphireDao ecosystem
 
 ### State Variables
 
@@ -23,55 +23,7 @@ Default time window during which a created invoice remains valid for payment.
 uint256 public constant DEFAULT_PAYMENT_VALIDITY_PERIOD = 7 days
 ```
 
-#### nextInvoiceNonce
-
-The next available unique invoice nonce.
-
-Used to track and increment standalone or sub-invoice nonces.
-
-```solidity
-uint216 private nextInvoiceNonce
-```
-
-#### paymentValidityDuration
-
-Duration (in seconds) for which a payment remains valid.
-
-```solidity
-uint256 private paymentValidityDuration
-```
-
-#### isAuthorized
-
-Tracks whether an address is authorized to perform restricted actions.
-
-Maps an address to a boolean indicating its authorization status.
-
-```solidity
-mapping(address => bool) private isAuthorized
-```
-
-#### config
-
-Stores the configuration settings for the contract (e.g., default hold period, gas threshold).
-
-Struct containing modifiable parameters used throughout the contract.
-
-```solidity
-Configuration private config
-```
-
 ### Functions
-
-#### onlyAuthorized
-
-Ensures that only authorized addresses can call the function.
-
-Reverts with `NotAuthorized` if `msg.sender` is not authorized.
-
-```solidity
-modifier onlyAuthorized() ;
-```
 
 #### constructor
 
@@ -158,23 +110,23 @@ function setFeeRate(uint256 _newFeeRate) external onlyOwner;
 
 |      Name     |    Type   |                Description               |
 | :-----------: | :-------: | :--------------------------------------: |
-| `_newFeeRate` | `uint256` | Updates the fee rate for seller payouts. |
+| `_newFeeRate` | `uint256` | The new fee rate in basis points (1% = 100 basis points). |
 
-#### setGasThresold
+#### setGasThreshold
 
 Updates the gas threshold used in automated upkeep logic.
 
-Callable only by authorized roles (e.g., admin or owner). This threshold determines the minimum gas required to continue processing during `performUpkeep`.
+Only callable by the contract owner. This threshold determines the minimum gas required to continue processing during `performUpkeep`.
 
 ```solidity
-function setGasThresold(uint256 _newGasThresold) external onlyOwner;
+function setGasThreshold(uint256 _newGasThreshold) external onlyOwner;
 ```
 
 **Parameters**
 
-|        Name       |    Type   |                   Description                  |
-| :---------------: | :-------: | :--------------------------------------------: |
-| `_newGasThresold` | `uint256` | The new gas threshold value (in units of gas). |
+|        Name         |    Type   |                   Description                  |
+| :-----------------: | :-------: | :--------------------------------------------: |
+| `_newGasThreshold`  | `uint256` | The new gas threshold value (in units of gas). |
 
 #### setPaymentValidityDuration
 
@@ -223,16 +175,6 @@ function setMarketplaceAddress(address _marketplaceAddress) external onlyOwner;
 |          Name         |    Type   |          Description         |
 | :-------------------: | :-------: | :--------------------------: |
 | `_marketplaceAddress` | `address` | The new marketplace address. |
-
-#### \_onlyAuthorized
-
-Ensures the caller is an authorized address.
-
-Reverts with NotAuthorized if the caller is not authorized.
-
-```solidity
-function _onlyAuthorized() internal view;
-```
 
 #### getPaymentValidityDuration
 

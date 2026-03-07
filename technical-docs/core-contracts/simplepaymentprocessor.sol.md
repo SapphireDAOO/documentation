@@ -19,14 +19,6 @@ You can find the full implementation [here](https://github.com/SapphireDAOO/paym
 
 ### State Variables
 
-#### notes
-
-Notes contract used for encrypted invoice notes.
-
-```solidity
-INotes private notes
-```
-
 #### CREATED
 
 Status code representing that a payment or transaction has been created.
@@ -99,28 +91,12 @@ Default decision period for the seller after an invoice is paid.
 uint256 public constant DEFAULT_SELLER_DECISION_WINDOW = 6 hours
 ```
 
-#### heap
-
-Internal min-heap used to efficiently manage scheduled invoice tasks by release time.
-
-```solidity
-TaskQueueLib.Heap private heap
-```
-
 #### ppStorage
 
 Reference to the external Payment Processor storage contract.
 
 ```solidity
 IPaymentProcessorStorage public immutable ppStorage
-```
-
-#### minimumInvoiceValue
-
-The minimum allowed value (in wei) required to create a new invoice.
-
-```solidity
-uint256 private minimumInvoiceValue
 ```
 
 #### decisionWindow
@@ -131,45 +107,7 @@ The window of time allowed for accepting a transaction after creation.
 uint256 public decisionWindow
 ```
 
-#### forwarder
-
-Address of the forwarder contract responsible for calling performUpkeep.
-
-```solidity
-address private forwarder
-```
-
-#### invoices
-
-Stores the `Invoice` structs, keyed by a unique invoice ID.
-
-The key is an unsigned integer representing the invoice ID, and the value is an `Invoice` struct that contains detailed information such as the creator, payer, status, amount, escrow address, timestamps, etc.
-
-```solidity
-mapping(uint216 invoiceId => Invoice invoiceData) private invoices
-```
-
-#### index
-
-Maps task or invoice ID to its 1-based index position in the heap.
-
-A value of 0 means the task is not present in the heap
-
-```solidity
-mapping(uint216 invoiceId => uint256 key) private index
-```
-
 ### Functions
-
-#### onlyAuthorized
-
-Restricts access to the payment processor owner or storage contract.
-
-Reverts with NotAuthorized if the caller is not permitted.
-
-```solidity
-modifier onlyAuthorized() ;
-```
 
 #### constructor
 
@@ -196,16 +134,16 @@ Creates a new invoice with a specified price.
 Optionally stores a reference to the user's off-chain notes file.
 
 ```solidity
-function createInvoice(uint256 _invoicePrice, bytes memory _storageRef, bool _share)
+function createInvoice(uint256 _price, bytes memory _storageRef, bool _share)
     external
     returns (uint216 invoiceId);
 ```
 
 **Parameters**
 
-|       Name      |    Type   |                       Description                      |
-| :-------------: | :-------: | :----------------------------------------------------: |
-| `_invoicePrice` | `uint256` |            The price of the invoice in wei.            |
+|      Name     |    Type   |                       Description                      |
+| :-----------: | :-------: | :----------------------------------------------------: |
+| `_price`      | `uint256` |            The price of the invoice in wei.            |
 |  `_storageRef`  |  `bytes`  | A bytes-encoded reference to the user's notes storage. |
 |     `_share`    |   `bool`  |      Whether the note is shared with non-authors.      |
 
@@ -238,9 +176,9 @@ function pay(uint216 _invoiceId, bytes memory _storageRef, bool _share)
 
 **Returns**
 
-|       Name      |    Type   |                             Description                             |
-| :-------------: | :-------: | :-----------------------------------------------------------------: |
-| `escrowAddress` | `address` | escrow The address of the escrow contract created for this payment. |
+|    Name   |    Type   |                             Description                             |
+| :-------: | :-------: | :-----------------------------------------------------------------: |
+| `escrow`  | `address` | The address of the escrow contract created for this payment. |
 
 #### acceptPayment
 
@@ -265,7 +203,7 @@ Marks the specified invoice as rejected and refunds the payer.
 This function updates the invoice status to `REJECTED`, refunds the payer via the escrow contract, and emits the `InvoiceRejected` event.
 
 ```solidity
-function rejectPayment(uint216 _invoiceId) public;
+function rejectPayment(uint216 _invoiceId) external;
 ```
 
 **Parameters**
@@ -295,7 +233,7 @@ function cancelInvoice(uint216 _invoiceId) external;
 Releases the funds held in escrow for a specific invoice to the seller.
 
 ```solidity
-function release(uint216 _invoiceId) public;
+function release(uint216 _invoiceId) external;
 ```
 
 **Parameters**
@@ -306,12 +244,12 @@ function release(uint216 _invoiceId) public;
 
 #### refundBuyer
 
-Refunds the seller of a specific invoice.
+Refunds the buyer of a specific invoice when the seller fails to act in time.
 
-This function allows the buyer to be refund if the acceptance window has not been exceeded and the invoice is eligible for a refund. The refund will be processed through the escrow contract.
+Invoice must be in PAID state and the decision window (`expiresAt`) must have elapsed. The invoice transitions to REFUNDED, removes it from the heap, zeroes the balance, and returns funds to the buyer.
 
 ```solidity
-function refundBuyer(uint216 _invoiceId) public;
+function refundBuyer(uint216 _invoiceId) external;
 ```
 
 **Parameters**
@@ -338,8 +276,8 @@ function checkUpkeep(bytes calldata) external view returns (bool upkeepNeeded, b
 
 |      Name      |   Type  |                          Description                         |
 | :------------: | :-----: | :----------------------------------------------------------: |
-| `upkeepNeeded` |  `bool` |     Data to pass to `performUpkeep` if upkeep is needed.     |
-|  `performData` | `bytes` | Boolean indicating whether `performUpkeep` should be called. |
+| `upkeepNeeded` |  `bool` | Boolean indicating whether `performUpkeep` should be called. |
+|  `performData` | `bytes` |     Data to pass to `performUpkeep` if upkeep is needed.     |
 
 #### performUpkeep
 
@@ -355,101 +293,14 @@ function performUpkeep(bytes calldata) external;
 | :------: | :-----: | :---------: |
 | `<none>` | `bytes` |             |
 
-#### \_validateInvoiceStateForPaymentDecision
-
-Validates that the caller can accept or reject a payment.
-
-Ensures caller is the seller and invoice is within the decision window.
-
-```solidity
-function _validateInvoiceStateForPaymentDecision(Invoice memory _invoice) internal view;
-```
-
-**Parameters**
-
-|    Name    |    Type   |          Description          |
-| :--------: | :-------: | :---------------------------: |
-| `_invoice` | `Invoice` | The invoice data to validate. |
-
-#### \_release
-
-Attempts to release the specified invoice if it is eligible.
-
-This function performs all the checks required to determine whether the invoice can be released, updates the invoice status, removes it from the scheduling heap, and triggers the escrow payout.
-
-```solidity
-function _release(uint216 _invoiceId) internal returns (uint256 status);
-```
-
-**Parameters**
-
-|     Name     |    Type   |            Description            |
-| :----------: | :-------: | :-------------------------------: |
-| `_invoiceId` | `uint216` | The ID of the invoice to release. |
-
-**Returns**
-
-|   Name   |    Type   |                                                                                                                   Description                                                                                                                   |
-| :------: | :-------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| `status` | `uint256` | A status code from TaskQueueLib indicating the outcome: - SUCCESSFUL (3): Invoice was released and removed from heap. - NOT\_ELIGIBLE\_FOR\_RELEASE (1): Invoice not accepted or not yet due. - ERROR (2): Invalid index or heap inconsistency. |
-
-#### \_computeInvoiceId
-
-Computes a unique order ID for an invoice using buyer, invoice ID, timestamp, and contract address.
-
-This function ensures the order ID is non-deterministic, even for repeated inputs.
-
-```solidity
-function _computeInvoiceId(address _buyer, uint256 _invoiceNonce) internal view returns (uint216 invoiceId);
-```
-
-**Parameters**
-
-|       Name      |    Type   |                    Description                   |
-| :-------------: | :-------: | :----------------------------------------------: |
-|     `_buyer`    | `address` |             The address of the buyer.            |
-| `_invoiceNonce` | `uint256` | The invoice identifier provided during creation. |
-
-**Returns**
-
-|     Name    |    Type   |                      Description                     |
-| :---------: | :-------: | :--------------------------------------------------: |
-| `invoiceId` | `uint216` | The keccak256 hash representing the unique order ID. |
-
-#### \_owner
-
-Returns the owner of the PaymentProcessorStorage contract.
-
-This helper reads the owner directly from the linked PaymentProcessorStorage instance.
-
-```solidity
-function _owner() internal view returns (address ownerAddress);
-```
-
-**Returns**
-
-|      Name      |    Type   |                              Description                              |
-| :------------: | :-------: | :-------------------------------------------------------------------: |
-| `ownerAddress` | `address` | The address that currently owns the PaymentProcessorStorage contract. |
-
-#### \_isAuthorized
-
-Internal function to validate whether the caller is authorized.
-
-Reverts if the caller is not the contract owner or the PaymentProcessorStorage contract itself. Can only be called by either the owner of the PaymentProcessor contract or the storage contract address.
-
-```solidity
-function _isAuthorized() internal view;
-```
-
 #### setInvoiceReleaseTime
 
 Sets a custom hold period for a specific invoice.
 
-Overrides the default hold period for this invoice.
+Only callable by the owner. Invoice must be in ACCEPTED state. The new release time is computed as `block.timestamp + _holdPeriod`. The invoice's heap entry is rescheduled to the new release time.
 
 ```solidity
-function setInvoiceReleaseTime(uint216 _invoiceId, uint32 _holdPeriod) external;
+function setInvoiceReleaseTime(uint216 _invoiceId, uint40 _holdPeriod) external;
 ```
 
 **Parameters**
@@ -457,7 +308,7 @@ function setInvoiceReleaseTime(uint216 _invoiceId, uint32 _holdPeriod) external;
 |      Name     |    Type   |           Description           |
 | :-----------: | :-------: | :-----------------------------: |
 |  `_invoiceId` | `uint216` |      The ID of the invoice.     |
-| `_holdPeriod` |  `uint32` | The new hold period in seconds. |
+| `_holdPeriod` |  `uint40` | The hold period from now in seconds. |
 
 #### calculateFee
 
@@ -485,24 +336,24 @@ function calculateFee(uint256 _amount) public view returns (uint256 feeValue);
 
 Updates the minimum allowed invoice value required for creating an invoice.
 
-Should only be callable by the contract owner or an authorized role.
+Only callable by the owner or the storage contract.
 
 ```solidity
-function setMinimumInvoiceValue(uint256 _newMinimumInvoiceValue) public onlyAuthorized;
+function setMinimumInvoiceValue(uint256 _minimumInvoiceValue) external;
 ```
 
 **Parameters**
 
 |            Name           |    Type   | Description |
 | :-----------------------: | :-------: | :---------: |
-| `_newMinimumInvoiceValue` | `uint256` |             |
+| `_minimumInvoiceValue` | `uint256` | The new minimum invoice value to set (in wei). |
 
 #### setForwarderAddress
 
 Updates the address of the forwarder contract used for relayed or automated calls.
 
 ```solidity
-function setForwarderAddress(address _forwarderAddress) external onlyAuthorized;
+function setForwarderAddress(address _forwarderAddress) external;
 ```
 
 **Parameters**
@@ -569,9 +420,9 @@ function getInvoiceData(uint216 _invoiceId) external view returns (Invoice memor
 
 **Returns**
 
-|       Name       |    Type   |    Description    |
-| :--------------: | :-------: | :---------------: |
-| `invoiceDetails` | `Invoice` | The invoice data. |
+|  Name |    Type   |    Description    |
+| :---: | :-------: | :---------------: |
+|  `i`  | `Invoice` | The invoice data. |
 
 #### getMinimumInvoiceValue
 
@@ -603,3 +454,122 @@ function getItems() external view returns (uint216[] memory items);
 | :-----: | :---------: | :----------------: |
 | `items` | `uint216[]` | Array of task IDs. |
 
+### Events
+
+#### InvoiceCreated
+
+Emitted when a new invoice is created.
+
+```solidity
+event InvoiceCreated(uint216 indexed invoiceId, Invoice invoice);
+```
+
+| Name        | Type      | Description                                                                          |
+| :---------- | :-------: | :----------------------------------------------------------------------------------- |
+| `invoiceId` | `uint216` | The unique identifier for the created invoice.                                       |
+| `invoice`   | `Invoice` | The full invoice struct containing buyer, price, timestamps, state, and metadata.    |
+
+#### InvoicePaid
+
+Emitted when an invoice payment is made.
+
+```solidity
+event InvoicePaid(uint216 indexed invoiceId, address indexed buyer, uint256 indexed amountPaid, uint40 expiresAt);
+```
+
+| Name        | Type      | Description                                                                                         |
+| :---------- | :-------: | :-------------------------------------------------------------------------------------------------- |
+| `invoiceId` | `uint216` | The unique ID of the paid invoice.                                                                  |
+| `buyer`     | `address` | The address of the buyer who paid.                                                                  |
+| `amountPaid`| `uint256` | The amount paid towards the invoice in wei.                                                         |
+| `expiresAt` | `uint40`  | The timestamp by which the seller must accept or reject; after this the buyer is eligible for refund. |
+
+#### InvoiceRejected
+
+Emitted when an invoice is rejected by the seller.
+
+```solidity
+event InvoiceRejected(uint216 indexed invoiceId);
+```
+
+| Name        | Type      | Description                             |
+| :---------- | :-------: | :-------------------------------------- |
+| `invoiceId` | `uint216` | The unique ID of the rejected invoice.  |
+
+#### InvoiceRefunded
+
+Emitted when an invoice is refunded to the buyer.
+
+```solidity
+event InvoiceRefunded(uint216 indexed invoiceId);
+```
+
+| Name        | Type      | Description                             |
+| :---------- | :-------: | :-------------------------------------- |
+| `invoiceId` | `uint216` | The unique ID of the refunded invoice.  |
+
+#### InvoiceAccepted
+
+Emitted when an invoice is accepted by the seller.
+
+```solidity
+event InvoiceAccepted(uint216 indexed invoiceId);
+```
+
+| Name        | Type      | Description                             |
+| :---------- | :-------: | :-------------------------------------- |
+| `invoiceId` | `uint216` | The unique ID of the accepted invoice.  |
+
+#### InvoiceCanceled
+
+Emitted when an invoice is canceled.
+
+```solidity
+event InvoiceCanceled(uint216 indexed invoiceId);
+```
+
+| Name        | Type      | Description                             |
+| :---------- | :-------: | :-------------------------------------- |
+| `invoiceId` | `uint216` | The unique ID of the canceled invoice.  |
+
+#### InvoiceReleased
+
+Emitted when an invoice is released (funds disbursed from escrow).
+
+```solidity
+event InvoiceReleased(uint216 indexed invoiceId);
+```
+
+| Name        | Type      | Description                             |
+| :---------- | :-------: | :-------------------------------------- |
+| `invoiceId` | `uint216` | The unique ID of the released invoice.  |
+
+#### UpdateHoldPeriod
+
+Emitted when the hold period of a given invoice is updated to a new timestamp.
+
+```solidity
+event UpdateHoldPeriod(uint216 indexed invoiceId, uint256 indexed releaseDueTimestamp);
+```
+
+| Name                   | Type      | Description                                                  |
+| :--------------------- | :-------: | :----------------------------------------------------------- |
+| `invoiceId`            | `uint216` | The key of the invoice whose hold period was updated.        |
+| `releaseDueTimestamp`  | `uint256` | The new hold period expressed as a UNIX timestamp.           |
+
+### Errors
+
+| Error | Description |
+| :---- | :---------- |
+| `NotAuthorized()` | Thrown when the caller lacks the required role or permission. |
+| `ValueIsTooLow()` | Thrown when the provided value is lower than the required minimum. |
+| `InvalidHeapPosition()` | Thrown when a task's heap index is invalid. |
+| `InvalidDecisionWindow()` | Thrown when the decision window value provided is invalid (e.g., zero). |
+| `IncorrectPaymentAmount(uint256 _sent, uint256 _expected)` | Thrown when the payment amount sent does not match the expected invoice price. |
+| `InvoiceAlreadyExists()` | Thrown when trying to create an invoice that already exists. |
+| `InvalidInvoiceState(uint256 _invoiceState)` | Thrown when the invoice is in an invalid state for the requested action. |
+| `InvoiceIsNoLongerValid()` | Thrown when a payment is attempted after the invoice's payment validity window has expired. |
+| `AcceptanceWindowExceeded()` | Thrown when the seller attempts to take action on an invoice after the acceptance window has expired. |
+| `SellerCannotPayOwnedInvoice()` | Thrown when the seller of an invoice attempts to pay for their own invoice. |
+| `InvoiceNotEligibleForRefund()` | Thrown when a refund to the buyer cannot be issued. |
+| `HoldPeriodHasNotBeenExceeded()` | Thrown when the hold period for an invoice has not yet been exceeded. |
