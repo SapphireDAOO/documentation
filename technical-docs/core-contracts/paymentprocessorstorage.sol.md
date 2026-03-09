@@ -23,6 +23,14 @@ Default time window during which a created invoice remains valid for payment.
 uint256 public constant DEFAULT_PAYMENT_VALIDITY_PERIOD = 7 days
 ```
 
+#### BASIS\_POINTS
+
+Total basis points used for percentage calculations. 10\_000 = 100%.
+
+```solidity
+uint256 public constant BASIS_POINTS = 10_000
+```
+
 ### Functions
 
 #### constructor

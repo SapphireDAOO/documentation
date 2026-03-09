@@ -49,7 +49,7 @@ uint8 public constant REFUNDED = PAID + 1
 
 #### CANCELED
 
-Seller has canceled the invoice before acceptance.
+Seller has canceled the invoice before payment.
 
 ```solidity
 uint8 public constant CANCELED = REFUNDED + 1
@@ -57,7 +57,7 @@ uint8 public constant CANCELED = REFUNDED + 1
 
 #### DISPUTED
 
-Buyer has raised a dispute after acceptance.
+Buyer has raised a dispute after payment.
 
 ```solidity
 uint8 public constant DISPUTED = CANCELED + 1
@@ -89,7 +89,7 @@ uint8 public constant DISPUTE_SETTLED = DISPUTE_DISMISSED + 1
 
 #### RELEASED
 
-Payment has been released to the seller after acceptance or resolution.
+Payment has been released to the seller after the hold period or dispute resolution.
 
 ```solidity
 uint8 public constant RELEASED = DISPUTE_SETTLED + 1
@@ -111,12 +111,20 @@ Default number of decimals used for internal fixed-point arithmetic (e.g., 1e18 
 uint8 public constant DEFAULT_DECIMAL = 18
 ```
 
-#### STALE\_THRESHOLD
+#### DEFAULT\_MINIMUM\_INVOICE\_PRICE
 
-Maximum age allowed for Chainlink price data before it is considered stale.
+Minimum invoice price applied when none is explicitly set (1 USD in 8-decimal Chainlink format).
 
 ```solidity
-uint256 public constant STALE_THRESHOLD = 1 hours
+uint256 public constant DEFAULT_MINIMUM_INVOICE_PRICE = 1e8
+```
+
+#### SEQUENCER\_GRACE\_PERIOD
+
+Minimum time (in seconds) to wait after the sequencer restarts before trusting price data. Protects against stale prices that accumulated while the sequencer was offline.
+
+```solidity
+uint256 public constant SEQUENCER_GRACE_PERIOD = 1 hours
 ```
 
 ### Functions
@@ -144,7 +152,6 @@ Only callable by the marketplace contract.
 ```solidity
 function createSingleInvoice(InvoiceCreationParam memory _param)
     external
-    onlyMarketplace
     returns (uint216 invoiceId);
 ```
 
@@ -169,7 +176,6 @@ Only callable by the marketplace contract. Each sub-invoice is created using the
 ```solidity
 function createMetaInvoice(InvoiceCreationParam[] memory _param)
     external
-    onlyMarketplace
     returns (uint216 metaInvoiceId);
 ```
 
@@ -258,7 +264,7 @@ handle a dispute on a given invoice.
 Callable only by the marketplace. Must be called after a dispute is created. The resolution can be DISPUTE\_DISMISSED, or DISPUTE\_SETTLED. If settled, the seller and buyer receive a split of the funds based on sellerShare.
 
 ```solidity
-function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare) external onlyMarketplace;
+function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare) external;
 ```
 
 **Parameters**
@@ -290,7 +296,7 @@ function release(uint216 _invoiceId) external;
 Issues a refund for a given order.
 
 ```solidity
-function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketplace;
+function refund(uint216 _invoiceId, uint256 _refundShare) external;
 ```
 
 **Parameters**
@@ -307,7 +313,7 @@ Cancels a single invoice before payment.
 Callable only by the marketplace. If the invoice belongs to a meta-invoice, the meta-invoice total price is reduced accordingly. Only valid for invoices in the CREATED state.
 
 ```solidity
-function cancelInvoice(uint216 _invoiceId) external;
+function cancelInvoice(uint216 _invoiceId) public;
 ```
 
 **Parameters**
@@ -323,7 +329,7 @@ Finalizes a dispute and marks the invoice as resolved.
 Callable only by the marketplace after a dispute has been raised by the buyer. This function is used when both parties (buyer and seller) have come to an agreement without requiring arbitration, or when the dispute period has expired with no further action. Transitions the invoice state from DISPUTED to DISPUTE\_RESOLVED.
 
 ```solidity
-function resolveDispute(uint216 _invoiceId) external onlyMarketplace;
+function resolveDispute(uint216 _invoiceId) external;
 ```
 
 **Parameters**
@@ -372,15 +378,15 @@ function performUpkeep(bytes calldata) external;
 Sets the Chainlink price feed aggregator for a specific payment token.
 
 ```solidity
-function setPriceFeed(address _token, address _aggregator) external;
+function setPriceFeed(address _token, PriceFeedConfig memory _config) external;
 ```
 
 **Parameters**
 
-|      Name     |    Type   |                       Description                      |
-| :-----------: | :-------: | :----------------------------------------------------: |
-|    `_token`   | `address` |             The address of the ERC20 token.            |
-| `_aggregator` | `address` | The address of the Chainlink aggregator for the token. |
+|    Name    |        Type         |                       Description                      |
+| :--------: | :-----------------: | :----------------------------------------------------: |
+|  `_token`  |      `address`      |             The address of the ERC20 token.            |
+| `_config`  | `PriceFeedConfig`   | The Chainlink price feed configuration for the token.  |
 
 #### setInvoiceReleaseTime
 
@@ -481,7 +487,7 @@ function getTokenValueFromUsd(address _paymentToken, uint256 _usdAmount) public 
 Retrieves the invoice data for a specific invoice ID.
 
 ```solidity
-function getInvoice(uint216 _invoiceId) external view returns (Invoice memory invoiceData);
+function getInvoice(uint216 _invoiceId) external view returns (Invoice memory i);
 ```
 
 **Parameters**
@@ -492,16 +498,16 @@ function getInvoice(uint216 _invoiceId) external view returns (Invoice memory in
 
 **Returns**
 
-|      Name     |    Type   |    Description    |
-| :-----------: | :-------: | :---------------: |
-| `invoiceData` | `Invoice` | The invoice data. |
+|  Name   |    Type   |    Description    |
+| :-----: | :-------: | :---------------: |
+|   `i`   | `Invoice` | The invoice data. |
 
 #### getMetaInvoice
 
 Retrieves the meta-invoice data for a specific meta-invoice ID.
 
 ```solidity
-function getMetaInvoice(uint216 _metaInvoiceId) public view returns (MetaInvoice memory metaInvoiceData);
+function getMetaInvoice(uint216 _metaInvoiceId) public view returns (MetaInvoice memory m);
 ```
 
 **Parameters**
@@ -512,9 +518,9 @@ function getMetaInvoice(uint216 _metaInvoiceId) public view returns (MetaInvoice
 
 **Returns**
 
-|        Name       |      Type     |       Description      |
-| :---------------: | :-----------: | :--------------------: |
-| `metaInvoiceData` | `MetaInvoice` | The meta-invoice data. |
+|   Name  |      Type     |       Description      |
+| :-----: | :-----------: | :--------------------: |
+|   `m`   | `MetaInvoice` | The meta-invoice data. |
 
 #### totalUniqueInvoiceCreated
 

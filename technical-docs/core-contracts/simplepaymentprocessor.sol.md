@@ -187,7 +187,7 @@ Marks the specified invoice as accepted.
 This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event. It is expected that the creator is approving the payment for the invoice.
 
 ```solidity
-function acceptPayment(uint216 _invoiceId) external;
+function acceptPayment(uint216 _invoiceId) public;
 ```
 
 **Parameters**
@@ -233,7 +233,7 @@ function cancelInvoice(uint216 _invoiceId) external;
 Releases the funds held in escrow for a specific invoice to the seller.
 
 ```solidity
-function release(uint216 _invoiceId) external;
+function release(uint216 _invoiceId) public;
 ```
 
 **Parameters**
@@ -339,14 +339,14 @@ Updates the minimum allowed invoice value required for creating an invoice.
 Only callable by the owner or the storage contract.
 
 ```solidity
-function setMinimumInvoiceValue(uint256 _minimumInvoiceValue) external;
+function setMinimumInvoiceValue(uint256 _newMinimumInvoiceValue) public;
 ```
 
 **Parameters**
 
-|            Name           |    Type   | Description |
-| :-----------------------: | :-------: | :---------: |
-| `_minimumInvoiceValue` | `uint256` | The new minimum invoice value to set (in wei). |
+|            Name               |    Type   |               Description               |
+| :---------------------------: | :-------: | :-------------------------------------: |
+| `_newMinimumInvoiceValue`     | `uint256` | The new minimum invoice value to set (in wei). |
 
 #### setForwarderAddress
 
@@ -367,7 +367,7 @@ function setForwarderAddress(address _forwarderAddress) external;
 Updates the decision window sellers have to accept payments after buyer payment.
 
 ```solidity
-function setDecisionWindow(uint256 _newDecisionWindow) external onlyAuthorized;
+function setDecisionWindow(uint256 _newDecisionWindow) external;
 ```
 
 **Parameters**
@@ -409,7 +409,7 @@ function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceVa
 Retrieves detailed data for a specific invoice.
 
 ```solidity
-function getInvoiceData(uint216 _invoiceId) external view returns (Invoice memory invoiceDetails);
+function getInvoiceData(uint216 _invoiceId) public view returns (Invoice memory i);
 ```
 
 **Parameters**
@@ -420,9 +420,9 @@ function getInvoiceData(uint216 _invoiceId) external view returns (Invoice memor
 
 **Returns**
 
-|  Name |    Type   |    Description    |
-| :---: | :-------: | :---------------: |
-|  `i`  | `Invoice` | The invoice data. |
+| Name |    Type   |    Description    |
+| :--: | :-------: | :---------------: |
+| `i`  | `Invoice` | The invoice data. |
 
 #### getMinimumInvoiceValue
 

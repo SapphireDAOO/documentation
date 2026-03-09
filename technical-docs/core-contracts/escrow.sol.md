@@ -17,7 +17,7 @@ address public immutable PAYMENT_PROCESSOR
 The invoice ID associated with the escrow.
 
 ```solidity
-uint256 public immutable INVOICE
+uint216 public immutable INVOICE_ID
 ```
 
 ### Functions

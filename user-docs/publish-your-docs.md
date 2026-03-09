@@ -2,7 +2,7 @@
 
 ### Seller
 
-A seller is a participant who provides goods or services and receives payment through the system. After the buyer has **made payment**, the seller accepts or rejects.
+A seller is a participant who provides goods or services and receives payment through the system. In the simple processor, after the buyer has **made payment**, the seller accepts or rejects the payment. In the advanced processor, the marketplace manages the payment flow on the seller's behalf.
 
 * In the simple processor, the seller creates the invoice
 * in the advanced processor, the system assigns it to the seller.

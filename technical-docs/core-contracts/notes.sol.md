@@ -84,12 +84,12 @@ function createNote(uint216 _invoiceId, address _author, bytes calldata _encrypt
 
 #### setOpened
 
-Mark a note as opened or unopened for an account.
+Mark a note as opened for an account.
 
 Only authorized callers can update opened state. Reverts with Unauthorized if the note is not shared — opened state can only be tracked for shared notes.
 
 ```solidity
-function setOpened(uint216 _invoiceId, address _account, uint256 _noteId, bool _open) external;
+function setOpened(uint216 _invoiceId, address _account, uint256 _noteId) external;
 ```
 
 **Parameters**
@@ -99,7 +99,6 @@ function setOpened(uint216 _invoiceId, address _account, uint256 _noteId, bool _
 | `_invoiceId` | `uint216` | Invoice identifier.                             |
 | `_account`   | `address` | Account whose opened state is updated.          |
 |   `_noteId`  | `uint256` | Note identifier.                                |
-|    `_open`   |   `bool`  | New opened state for the account.               |
 
 #### getNoteCount
 
