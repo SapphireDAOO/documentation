@@ -24,7 +24,7 @@ This subgraph indexes three Sapphire DAO smart contracts deployed on the Base Se
 
 #### SimplePaymentProcessor
 
-- **Address:** `0x4d87773993894f19c43299a50f01ff60f87e558f`
+- **Address:** `0x5214b494598c706a482a36dc6fece2fdaff3390d`
 - **Start block:** `38643870`
 - **Handler file:** `src/simple-payment-processor.ts`
 
@@ -47,7 +47,7 @@ This subgraph indexes three Sapphire DAO smart contracts deployed on the Base Se
 |          `DisputeSettled(invoiceId, sellerAmount, buyerAmount)`          |         `handleDisputeSettled`          |           Marks invoice as `DISPUTE SETTLED`, records commission tx           |
 |             `MetaInvoiceCreated(metaInvoiceId, totalPrice)`              |       `handleMetaInvoiceCreated`        |                        Creates a `MetaInvoice` entity                         |
 |      `PaymentReleased(invoiceId, receiver, currency, sellerAmount)`      |         `handlePaymentReleased`         |                  Marks invoice as `RELEASED`, zeroes balance                  |
-|                      `Refunded(invoiceId, amount)`                       |            `handleRefunded`             |         Reduces balance; state becomes `REFUNDED` or `PARTIAL REFUND`         |
+|                      `Refunded(invoiceId, amount)`                       |            `handleRefunded`             |              Reduces escrow balance; marks invoice as `REFUNDED`              |
 |              `UpdateReleaseTime(invoiceId, newHoldPeriod)`               |        `handleUpdateReleaseTime`        |                        Extends the escrow hold period                         |
 |                   `setPriceFeed(token, config)` (call)                   |          `handleAllowedTokens`          |                  Creates or updates a `PaymentToken` entity                   |
 
@@ -125,6 +125,11 @@ Represents one invoice on the AdvancedPaymentProcessor contract. Supports multi-
 | `commissionTxHash` |    `Bytes`     |     Transaction hash of release or dispute settlement (when commission is taken)     |
 |   `refundTxHash`   |    `Bytes`     |                             Transaction hash of a refund                             |
 |   `releaseHash`    |    `Bytes`     |                           Transaction hash of the release                            |
+| `disputeSettledTxHash` | `Bytes`   |             Transaction hash of the dispute settlement                               |
+|  `amountReleased`  |    `String`    |       Cumulative amount released to the seller (updated on payment release and dispute settlement) |
+|  `amountRefunded`  |    `String`    |       Cumulative amount refunded to the buyer (updated on refund and dispute settlement) |
+| `sellerAmountReceivedAfterDispute` | `String` |  Seller's share of funds from dispute settlement |
+| `buyerAmountReceivedAfterDispute`  | `String` |  Buyer's share of funds from dispute settlement  |
 |     `history`      |  `[String!]!`  |                             Ordered state transition log                             |
 |   `historyTime`    |  `[String!]!`  |                          Timestamps for each history entry                           |
 |  `lastActionTime`  |    `BigInt`    |                          Most recent state change timestamp                          |
@@ -269,8 +274,7 @@ All timestamps are Unix seconds stored as `BigInt`.
 | `DISPUTE DISMISSED` |    Admin dismissed the dispute; invoice returns to normal flow    |
 | `DISPUTE RESOLVED`  |          Admin resolved the dispute in one party's favor          |
 |  `DISPUTE SETTLED`  |          Admin split the funds between buyer and seller           |
-|  `PARTIAL REFUND`   | Part of the escrow balance refunded; remaining balance still held |
-|     `REFUNDED`      |               Full escrow balance refunded to buyer               |
+|     `REFUNDED`      |               Escrow balance refunded to buyer (partial or full)  |
 
 ---
 
