@@ -24,12 +24,12 @@ uint216 public immutable INVOICE_ID
 
 #### constructor
 
-Initializes the escrow contract with invoice details and deposits the funds.
+Initializes the escrow contract and receives the deposited funds.
 
-This constructor sets the invoice ID, creator, payer, and payment processor addresses, and records the sent Ether as the balance.
+Sets the immutable invoice ID and payment processor address. Any ETH sent with deployment is held by the contract. ERC20 escrows receive tokens via a direct transfer.
 
 ```solidity
-constructor(uint216 _invoiceId, address _creator, address _payer, address _paymentProcessorAddress) payable;
+constructor(uint216 _invoiceId, address _paymentProcessorAddress) payable;
 ```
 
 **Parameters**
@@ -37,8 +37,6 @@ constructor(uint216 _invoiceId, address _creator, address _payer, address _payme
 |            Name            |   Type    |                             Description                             |
 | :------------------------: | :-------: | :-----------------------------------------------------------------: |
 |        `_invoiceId`        | `uint216` |  The unique identifier of the invoice associated with this escrow.  |
-|         `_creator`         | `address` |                 The address of the invoice creator.                 |
-|          `_payer`          | `address` |              The address of the payer for the invoice.              |
 | `_paymentProcessorAddress` | `address` | The address of the payment processor contract managing the invoice. |
 
 #### withdraw
@@ -48,7 +46,7 @@ Withdraws ETH or ERC20 tokens from the escrow contract to a specified receiver.
 Only callable by the payment processor. Transfers ETH if `token` is the zero address, otherwise transfers ERC20 tokens.
 
 ```solidity
-function withdraw(address _token, address _receiver, uint256 _amount) external;
+function withdraw(address _token, address _receiver, uint256 _amount) external returns (bool success);
 ```
 
 **Parameters**

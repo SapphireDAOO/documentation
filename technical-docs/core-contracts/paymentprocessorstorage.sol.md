@@ -111,14 +111,14 @@ Updates the fee rate for seller payouts.
 Callable only by the contract owner.
 
 ```solidity
-function setFeeRate(uint256 _newFeeRate) external onlyOwner;
+function setFeeRate(uint96 _newFeeRate) external onlyOwner;
 ```
 
 **Parameters**
 
 |      Name     |    Type   |                Description               |
 | :-----------: | :-------: | :--------------------------------------: |
-| `_newFeeRate` | `uint256` | The new fee rate in basis points (1% = 100 basis points). |
+| `_newFeeRate` | `uint96` | The new fee rate in basis points (1% = 100 basis points). |
 
 #### setGasThreshold
 
@@ -127,14 +127,14 @@ Updates the gas threshold used in automated upkeep logic.
 Only callable by the contract owner. This threshold determines the minimum gas required to continue processing during `performUpkeep`.
 
 ```solidity
-function setGasThreshold(uint256 _newGasThreshold) external onlyOwner;
+function setGasThreshold(uint96 _newGasThreshold) external onlyOwner;
 ```
 
 **Parameters**
 
 |        Name         |    Type   |                   Description                  |
 | :-----------------: | :-------: | :--------------------------------------------: |
-| `_newGasThreshold`  | `uint256` | The new gas threshold value (in units of gas). |
+| `_newGasThreshold`  | `uint96` | The new gas threshold value (in units of gas). |
 
 #### setPaymentValidityDuration
 
@@ -159,14 +159,14 @@ Updates the default hold period for all new invoices.
 Only callable by the contract owner.
 
 ```solidity
-function setDefaultHoldPeriod(uint256 _newDefaultHoldPeriod) public onlyOwner;
+function setDefaultHoldPeriod(uint96 _newDefaultHoldPeriod) public onlyOwner;
 ```
 
 **Parameters**
 
 |           Name          |    Type   |               Description               |
 | :---------------------: | :-------: | :-------------------------------------: |
-| `_newDefaultHoldPeriod` | `uint256` | The new default hold period in seconds. |
+| `_newDefaultHoldPeriod` | `uint96` | The new default hold period in seconds. |
 
 #### setMarketplaceAddress
 

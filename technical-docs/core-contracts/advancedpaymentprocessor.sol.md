@@ -95,6 +95,22 @@ Payment has been released to the seller after the hold period or dispute resolut
 uint8 public constant RELEASED = DISPUTE_SETTLED + 1
 ```
 
+#### LOCKED
+
+Invoice is permanently locked after all automated withdrawal retries (seller + buyer) failed.
+
+```solidity
+uint8 public constant LOCKED = RELEASED + 1
+```
+
+#### MAX\_WITHDRAWAL\_RETRIES
+
+Maximum number of automated seller-payout retry attempts before falling back to a buyer refund.
+
+```solidity
+uint8 public constant MAX_WITHDRAWAL_RETRIES = 3
+```
+
 #### BASIS\_POINTS
 
 Total basis points used for percentage calculations. 10\_000 = 100%.
@@ -134,7 +150,7 @@ uint256 public constant SEQUENCER_GRACE_PERIOD = 1 hours
 Initializes the AdvancedPaymentProcessor contract with core configuration.
 
 ```solidity
-constructor(address _paymentProcessorStorageAddress) ;
+constructor(address _paymentProcessorStorageAddress, address _oracle) ;
 ```
 
 **Parameters**
@@ -142,6 +158,7 @@ constructor(address _paymentProcessorStorageAddress) ;
 |                Name               |    Type   |                          Description                          |
 | :-------------------------------: | :-------: | :-----------------------------------------------------------: |
 | `_paymentProcessorStorageAddress` | `address` | The address of the shared payment processor storage contract. |
+|            `_oracle`              | `address` | The address of the OracleManager contract for price feeds.    |
 
 #### createSingleInvoice
 
@@ -338,6 +355,24 @@ function resolveDispute(uint216 _invoiceId) external;
 | :----------: | :-------: | :--------------------------------------------: |
 | `_invoiceId` | `uint216` | The unique identifier of the disputed invoice. |
 
+#### releaseLocked
+
+Recovers funds from a permanently locked invoice by sending them to a specified recipient.
+
+Only callable by the contract owner. Valid only for invoices in the `LOCKED` state. Transfers the full escrow balance to `_recipient` and transitions the invoice to `RELEASED`.
+
+```solidity
+function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external;
+```
+
+**Parameters**
+
+|     Name     |    Type   |                           Description                          |
+| :----------: | :-------: | :------------------------------------------------------------: |
+| `_invoiceId` | `uint216` | The ID of the locked invoice.                                  |
+| `_recipient` | `address` | The address to receive the recovered funds.                    |
+|  `_amount`   | `uint256` | The amount to transfer from the escrow.                        |
+
 #### checkUpkeep
 
 Checks if upkeep is needed.
@@ -372,21 +407,6 @@ function performUpkeep(bytes calldata) external;
 |   Name   |   Type  | Description |
 | :------: | :-----: | :---------: |
 | `<none>` | `bytes` |             |
-
-#### setPriceFeed
-
-Sets the Chainlink price feed aggregator for a specific payment token.
-
-```solidity
-function setPriceFeed(address _token, PriceFeedConfig memory _config) external;
-```
-
-**Parameters**
-
-|    Name    |        Type         |                       Description                      |
-| :--------: | :-----------------: | :----------------------------------------------------: |
-|  `_token`  |      `address`      |             The address of the ERC20 token.            |
-| `_config`  | `PriceFeedConfig`   | The Chainlink price feed configuration for the token.  |
 
 #### setInvoiceReleaseTime
 
@@ -507,7 +527,7 @@ function getInvoice(uint216 _invoiceId) external view returns (Invoice memory i)
 Retrieves the meta-invoice data for a specific meta-invoice ID.
 
 ```solidity
-function getMetaInvoice(uint216 _metaInvoiceId) public view returns (MetaInvoice memory m);
+function getMetaInvoice(uint216 _metaInvoiceId) external view returns (MetaInvoice memory m);
 ```
 
 **Parameters**
@@ -741,6 +761,35 @@ event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
 | `invoiceId`     | `uint216` | The unique identifier of the invoice whose release time was modified. |
 | `newHoldPeriod` | `uint256` | The updated escrow hold duration in seconds.                       |
 
+#### WithdrawalRetried
+
+Emitted when an automated withdrawal attempt fails and is retried.
+
+```solidity
+event WithdrawalRetried(uint216 indexed invoiceId, address indexed recipient, uint256 amount, uint8 attempt);
+```
+
+| Name        | Type      | Description                                         |
+| :----------: | :-------: | :--------------------------------------------------: |
+| `invoiceId` | `uint216` | The ID of the invoice whose withdrawal was retried. |
+| `recipient` | `address` | The address the withdrawal was attempted to.        |
+| `amount`    | `uint256` | The amount that failed to transfer.                 |
+| `attempt`   | `uint8`   | The retry attempt number.                           |
+
+#### LockedPaymentRecovered
+
+Emitted when a locked invoice's funds are manually recovered by the owner.
+
+```solidity
+event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
+```
+
+| Name        | Type      | Description                                       |
+| :----------: | :-------: | :------------------------------------------------: |
+| `invoiceId` | `uint216` | The ID of the locked invoice that was recovered.  |
+| `recipient` | `address` | The address that received the recovered funds.    |
+| `amount`    | `uint256` | The amount of funds recovered.                    |
+
 ### Errors
 
 | Error | Description |
@@ -763,3 +812,5 @@ event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
 | `MetaInvoiceAlreadyExists()` | Thrown when a computed meta-invoice ID is already assigned in storage. |
 | `InvalidDisputeResolution()` | Thrown when the dispute resolution type is invalid. |
 | `InvalidSellersPayoutShare()` | Thrown when the seller's payout share exceeds the allowed limit (10000 BPS). |
+| `InvalidSeller()` | Thrown when the seller address provided is invalid. |
+| `EscrowWithdrawFailed()` | Thrown when the escrow contract fails to execute a withdrawal. |

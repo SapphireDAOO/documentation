@@ -24,6 +24,7 @@
   * [AdvancedPaymentProcessor.sol](technical-docs/core-contracts/advancedpaymentprocessor.sol.md)
   * [Escrow.sol](technical-docs/core-contracts/escrow.sol.md)
   * [Notes.sol](technical-docs/core-contracts/notes.sol.md)
+  * [OracleManager.sol](technical-docs/core-contracts/oraclemanager.sol.md)
 * [Library](technical-docs/library/README.md)
   * [TaskQueueLib.sol](technical-docs/library/taskqueuelib.sol.md)
 * [API communication](technical-docs/api-communication.md)

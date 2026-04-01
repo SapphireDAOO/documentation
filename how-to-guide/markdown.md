@@ -13,6 +13,7 @@ Track invoices on the dashboard’s Invoice List, where users can monitor status
 * **Rejected** – Seller explicitly rejected the payment; buyer receives a refund.
 * **Refunded** – Funds were returned from escrow to the buyer (for example, after rejection or no seller action within the allowed time).
 * **Released** – Funds have been released to the seller.
+* **Locked** – All automated withdrawal attempts failed; funds are secured and can be recovered by the platform admin.
 * **Canceled** – The invoice was canceled.
 
 When the Buyer makes payment, the funds are held in escrow. After reviewing the payment, the seller decides whether to accept it and moves the invoice to the release period, rejecting it to refund the Buyer. The seller has a limited time window to take action;  if not action is taken within that period, the escrow funds are automatically refunded to the Buyer.

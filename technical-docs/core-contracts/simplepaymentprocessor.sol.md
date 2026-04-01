@@ -75,6 +75,22 @@ Status code representing that a payment has been successfully released to the pa
 uint8 public constant RELEASED = REFUNDED + 1
 ```
 
+#### LOCKED
+
+Invoice is permanently locked after all automated withdrawal retries (seller + buyer) failed.
+
+```solidity
+uint8 public constant LOCKED = RELEASED + 1
+```
+
+#### MAX\_WITHDRAWAL\_RETRIES
+
+Maximum number of automated seller-payout retry attempts before falling back to a buyer refund.
+
+```solidity
+uint8 public constant MAX_WITHDRAWAL_RETRIES = 3
+```
+
 #### BASIS\_POINTS
 
 Basis points denominator used for percentage calculations (1% = 100).
@@ -83,12 +99,12 @@ Basis points denominator used for percentage calculations (1% = 100).
 uint256 public constant BASIS_POINTS = 10_000
 ```
 
-#### DEFAULT\_SELLER\_DECISION\_WINDOW
+#### SELLER\_DEFAULT\_DECISION\_WINDOW
 
 Default decision period for the seller after an invoice is paid.
 
 ```solidity
-uint256 public constant DEFAULT_SELLER_DECISION_WINDOW = 6 hours
+uint256 public constant SELLER_DEFAULT_DECISION_WINDOW = 6 hours
 ```
 
 #### ppStorage
@@ -187,7 +203,7 @@ Marks the specified invoice as accepted.
 This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event. It is expected that the creator is approving the payment for the invoice.
 
 ```solidity
-function acceptPayment(uint216 _invoiceId) public;
+function acceptPayment(uint216 _invoiceId) external;
 ```
 
 **Parameters**
@@ -233,7 +249,7 @@ function cancelInvoice(uint216 _invoiceId) external;
 Releases the funds held in escrow for a specific invoice to the seller.
 
 ```solidity
-function release(uint216 _invoiceId) public;
+function release(uint216 _invoiceId) external;
 ```
 
 **Parameters**
@@ -257,6 +273,24 @@ function refundBuyer(uint216 _invoiceId) external;
 |     Name     |    Type   |              Description              |
 | :----------: | :-------: | :-----------------------------------: |
 | `_invoiceId` | `uint216` | The ID of the invoice to be refunded. |
+
+#### releaseLocked
+
+Recovers funds from a permanently locked invoice by sending them to a specified recipient.
+
+Only callable by an authorized address. Valid only for invoices in the `LOCKED` state. Transfers the full escrow balance to `_recipient` and transitions the invoice to `RELEASED`.
+
+```solidity
+function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external;
+```
+
+**Parameters**
+
+|     Name     |    Type   |                           Description                          |
+| :----------: | :-------: | :------------------------------------------------------------: |
+| `_invoiceId` | `uint216` |             The ID of the locked invoice.                      |
+| `_recipient` | `address` | The address to receive the recovered funds.                    |
+|  `_amount`   | `uint256` | The amount to transfer from the escrow.                        |
 
 #### checkUpkeep
 
@@ -339,7 +373,7 @@ Updates the minimum allowed invoice value required for creating an invoice.
 Only callable by the owner or the storage contract.
 
 ```solidity
-function setMinimumInvoiceValue(uint256 _newMinimumInvoiceValue) public;
+function setMinimumInvoiceValue(uint256 _newMinimumInvoiceValue) external;
 ```
 
 **Parameters**
@@ -409,7 +443,7 @@ function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceVa
 Retrieves detailed data for a specific invoice.
 
 ```solidity
-function getInvoiceData(uint216 _invoiceId) public view returns (Invoice memory i);
+function getInvoiceData(uint216 _invoiceId) external view returns (Invoice memory i);
 ```
 
 **Parameters**
@@ -557,6 +591,49 @@ event UpdateHoldPeriod(uint216 indexed invoiceId, uint256 indexed releaseDueTime
 | `invoiceId`            | `uint216` | The key of the invoice whose hold period was updated.        |
 | `releaseDueTimestamp`  | `uint256` | The new hold period expressed as a UNIX timestamp.           |
 
+#### WithdrawalRetried
+
+Emitted when an automated withdrawal attempt fails and is retried.
+
+```solidity
+event WithdrawalRetried(uint216 indexed invoiceId, address indexed recipient, uint256 amount, uint8 attempt);
+```
+
+| Name        | Type      | Description                                         |
+| :----------: | :-------: | :--------------------------------------------------: |
+| `invoiceId` | `uint216` | The ID of the invoice whose withdrawal was retried. |
+| `recipient` | `address` | The address the withdrawal was attempted to.        |
+| `amount`    | `uint256` | The amount that failed to transfer.                 |
+| `attempt`   | `uint8`   | The retry attempt number.                           |
+
+#### LockedPaymentRecovered
+
+Emitted when a locked invoice's funds are manually recovered by an authorized address.
+
+```solidity
+event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
+```
+
+| Name        | Type      | Description                                       |
+| :----------: | :-------: | :------------------------------------------------: |
+| `invoiceId` | `uint216` | The ID of the locked invoice that was recovered.  |
+| `recipient` | `address` | The address that received the recovered funds.    |
+| `amount`    | `uint256` | The amount of funds recovered.                    |
+
+#### TransferFailed
+
+Emitted when a transfer from the escrow fails.
+
+```solidity
+event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
+```
+
+| Name        | Type      | Description                                  |
+| :----------: | :-------: | :-------------------------------------------: |
+| `invoiceId` | `uint216` | The ID of the invoice associated with the transfer. |
+| `recipient` | `address` | The address the transfer was attempted to.   |
+| `amount`    | `uint256` | The amount that failed to transfer.          |
+
 ### Errors
 
 | Error | Description |
@@ -573,3 +650,4 @@ event UpdateHoldPeriod(uint216 indexed invoiceId, uint256 indexed releaseDueTime
 | `SellerCannotPayOwnedInvoice()` | Thrown when the seller of an invoice attempts to pay for their own invoice. |
 | `InvoiceNotEligibleForRefund()` | Thrown when a refund to the buyer cannot be issued. |
 | `HoldPeriodHasNotBeenExceeded()` | Thrown when the hold period for an invoice has not yet been exceeded. |
+| `EscrowWithdrawFailed()` | Thrown when the escrow contract fails to execute a withdrawal. |
