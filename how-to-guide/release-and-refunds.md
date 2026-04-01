@@ -6,4 +6,4 @@ Chainlink Automation continuously checks the contract to see whether the next sc
 
 If an automated release transfer fails, the contract retries it up to three times. If all seller-payout retries fail, the contract attempts to refund the buyer instead. If those attempts also fail, the invoice transitions to **Locked** — the funds remain secured in escrow and a platform admin can recover them manually using the `releaseLocked` function.
 
-Refunds are handled separately through the platform’s authorized flows, while Chainlink Automation ensures timed releases happen reliably and without manual intervention.
+In the Simple Processor, refunds are also automated: if the seller does not act within the decision window, Chainlink Automation triggers a refund to the buyer. In the Advanced Processor, refunds are manual and can only be initiated by the authorized platform operator.
