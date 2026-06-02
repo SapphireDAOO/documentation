@@ -1,6 +1,6 @@
 # Dashboard Metrics — Technical Spec
 
-Aggregated metrics maintained in the subgraph for the dashboard. Historical/past-window views are served via block-by-timestamp lookups against time-travel queries on a small set of global entities.
+Aggregated metrics maintained in the subgraph for the dashboard. Historical/past-window views are served by the subgraph's native **Timeseries and Aggregations** — daily (and, where useful, hourly) buckets are rolled up automatically by graph-node, so windowed and percentage-change views need no third-party block-by-timestamp lookups or time-travel queries.
 
 ## Schemas
 
@@ -10,15 +10,14 @@ The bulk of dashboard state is consolidated into a single `metricData` entity. R
 
 ```ts
 const metricData = {
-  volume: {
-    usdc: "",
-    eth: "",
-  },
-  escrowBalance: {
-    usdc: "",
-    eth: "",
-  },
-  paidInvoice: "",
+  tokenData: [
+    {
+      name: "",
+      volumeBalance: "",
+      escrowBalance: "",
+    },
+  ],
+  paidInvoices: "",
   lastPaidInvoiceTimestamp: "",
   transactionCount: {
     simple: "",
@@ -84,13 +83,13 @@ Per-token cumulative volume stored under `metricData.volume.{usdc,eth}`. The das
 
 #### Windowed Volume & Percentage Change
 
-The stored `volume[token]` is monotonically increasing. Windowed views and percentage change are computed on the client from subgraph time-travel queries — the subgraph itself does not persist percentages.
+The stored `volume[token]` is monotonically increasing. Windowed views and percentage change are computed on the client; the subgraph itself does not persist percentages. The historical anchors come from the subgraph's **Timeseries and Aggregations** — no third-party block-by-timestamp resolution and no time-travel queries.
 
 Notation (computed per token, then summed in USD on the client):
 
 - `V_now` — `volume[token]` at the current block.
-- `V_30` — `volume[token]` at the block ~30 days ago.
-- `V_60` — `volume[token]` at the block ~60 days ago.
+- `V_30` — `volume[token]` as of ~30 days ago.
+- `V_60` — `volume[token]` as of ~60 days ago.
 
 Derived values:
 
@@ -98,12 +97,53 @@ Derived values:
 - **Prior 30-day volume:** `V_30 - V_60`
 - **% change:** `((V_now - V_30) - (V_30 - V_60)) / (V_30 - V_60) * 100`
 
-Fetching historical values:
+Fetching historical anchors via Timeseries and Aggregations:
 
-1. Resolve "block at timestamp `T`" via a third-party service — e.g. Etherscan's block-by-timestamp endpoint. The subgraph cannot answer this on its own.
-2. **Cache** the resolved block number with a TTL that runs to end-of-day. Within a single day every client converges on the same `V_30` / `V_60` anchors.
-3. Re-query `metricData` at the cached block using the subgraph's `block: { number: ... }` argument.
-4. Apply the same procedure for `V_30` and `V_60`.
+The subgraph records each payment in a timeseries and rolls it up into a daily aggregation. graph-node closes each day's bucket on its own, so the anchors are reconstructed from `V_now` (the live cumulative) minus the aggregated daily deltas.
+
+```graphql
+# One immutable record per payment
+type PaymentVolume @entity(timeseries: true) {
+  id: Int8!
+  timestamp: Timestamp!
+  token: String!
+  amount: BigDecimal!
+}
+
+# Daily volume per token, rolled up automatically by graph-node
+type VolumeStats @aggregation(intervals: ["day"], source: "PaymentVolume") {
+  id: Int8!
+  timestamp: Timestamp!
+  token: String!                                  # grouping dimension
+  dailyVolume: BigDecimal! @aggregate(fn: "sum", arg: "amount")
+}
+```
+
+The `Paid` handler writes one `PaymentVolume` point per payment (it still increments `metricData.volume[token]` for `V_now`).
+
+1. `V_now` is read directly from `metricData.volume[token]`.
+2. Query the daily buckets for the last ~60 days:
+
+   ```graphql
+   {
+     volumeStats(
+       interval: day
+       where: { token: "usdc", timestamp_gte: $sixtyDaysAgo }
+       orderBy: timestamp
+       orderDirection: desc
+     ) {
+       timestamp
+       dailyVolume
+     }
+   }
+   ```
+
+3. Reconstruct the anchors by subtracting the aggregated deltas from `V_now`:
+   - `V_30 = V_now − Σ dailyVolume` over the most recent 30 buckets.
+   - `V_60 = V_now − Σ dailyVolume` over the most recent 60 buckets.
+4. Feed `V_now`, `V_30`, `V_60` into the formulas above.
+
+Closed daily buckets are immutable, so they can be cached indefinitely; only the current (open) bucket needs refreshing.
 
 Guard against `V_30 - V_60 == 0` (no activity in the prior window) before computing the percentage on the client.
 
@@ -144,8 +184,8 @@ Daily transaction count split between the **simple** and **advanced** payment pr
 - **Storage:** the subgraph keeps a single counter pair (`simple`, `advanced`) along with `lastUpdateTimestamp`.
 - **Daily reset (subgraph):** on every update, if `now - lastUpdateTimestamp > 24h`, reset the relevant counter to 1 (the current event) instead of incrementing.
 - **Daily reset (frontend):** mirror the same 24h-cutoff check — if the cached counter is older than 24 hours with no new event, display zero.
-- **Historical days:** use the block-by-timestamp lookup (same pattern as Total Volume) to fetch counts for prior days. The chart typically needs ~7 block anchors.
-- **Caching:** persist resolved block numbers via CDN, **per window per day** — once a day's anchors are resolved, every client reuses them.
+- **Historical days:** back the chart with a `TxCount` timeseries (one record per transaction, `processor` as a dimension) and a daily `count` aggregation. The ~7-day chart is then a single ranged query over daily buckets — no block anchors.
+- **Caching:** closed daily buckets are immutable, so a past day can be cached indefinitely; only the current (open) bucket needs refreshing.
 
 ## Recent Transactions
 
@@ -158,10 +198,10 @@ A short, ordered list of the most recent transactions across the two processor s
 
 ## User Metrics
 
-Stored as a global `newUsers` counter; computed views are derived using the same windowed pattern as Total Volume.
+Stored as a global `newUsers` counter; computed views are derived using the same daily-aggregation windows as Total Volume.
 
-- **New Creators / New Payers:** if a creator or payer address is not already present in the subgraph record, increment the counter. The dashboard surfaces the count _added in the last 7 days_ (raw count, not percentage) and compares it against the prior 7-day count using the [block-by-timestamp lookup](#windowed-volume--percentage-change).
-- **Active Users:** count of unique users observed in the last 24 hours. The counter resets every 24 hours. Day-over-day percentage growth is computed using the same block-by-timestamp lookup pattern as Total Volume.
+- **New Creators / New Payers:** if a creator or payer address is not already present in the subgraph record, increment the counter and emit a `NewUser` timeseries point (with a `role` dimension). The dashboard surfaces the count _added in the last 7 days_ (raw count, not percentage) from the daily `count` aggregation and compares it against the prior 7-day window — no block-by-timestamp anchors.
+- **Active Users:** count of unique users observed in the last 24 hours. The counter resets every 24 hours. Day-over-day percentage growth is computed from the same daily-aggregation windows as [Total Volume](#windowed-volume--percentage-change).
 
 ## Gas Tracker
 
@@ -188,5 +228,5 @@ The subgraph-derived flow above is poll-based and reflects committed state only.
 
 - Update related metrics inside a single event-handler transaction so the entity stays internally consistent.
 - Settlement events (`Refund`, `Disputed`, `Release`) must reverse `escrowBalance[token]` and `paidInvoice`. They do **not** reverse `volume[token]` — that is cumulative.
-- For windowed/historical reads, share the block-by-timestamp cache across metrics — every metric that needs a 30-day-ago anchor reads from the same cached value.
+- For windowed/historical reads, query the daily aggregation buckets and sum the relevant windows on the client; closed daily buckets are immutable and safely cacheable, so only the current open bucket needs refreshing.
 - The frontend should never recompute USD values from raw token amounts directly; it consumes whichever USD representation results from the chosen conversion strategy.
