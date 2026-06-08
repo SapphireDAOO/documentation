@@ -6,6 +6,8 @@ Aggregated metrics maintained in the subgraph for the dashboard. Historical/past
 
 There is no consolidated `metricData` entity. Each metric is backed by its own immutable **timeseries** entity plus an **aggregation** that graph-node rolls up per interval. The only mutable singleton is `GasPaid`. Per-token metrics reference the `PaymentToken` entity (its `id` is the token address; the native token ETH uses the zero address).
 
+The dashboard websocket and the subgraph mappings apply the same per-entity updates, decoded from the processor event ABIs in [`payment-processor/src/interface`](https://github.com/SapphireDAOO/payment-processor/tree/main/src/interface) (`ISimplePaymentProcessor.sol`, `IAdvancedPaymentProcessor.sol`).
+
 ### Volume — `PaymentVolume` / `VolumeStats`
 
 ```graphql
@@ -30,12 +32,15 @@ type VolumeStats @aggregation(intervals: ["day"], source: "PaymentVolume") {
 ### Escrow — `EscrowBalance` / `EscrowStat`
 
 ```graphql
-# Signed escrow deltas: + on payment, − on refund / release / dispute settlement
+# Signed escrow deltas (balance): + on payment, − on refund / release / dispute
+# settlement. amountPaid is the gross amount paid in (positive on payment only),
+# so it never nets back down on settlement.
 type EscrowBalance @entity(timeseries: true) {
   id: Int8!
   timestamp: Timestamp!
   token: PaymentToken!
   balance: BigInt!
+  amountPaid: BigInt!
 }
 
 type EscrowStat
@@ -43,7 +48,10 @@ type EscrowStat
   id: Int8!
   timestamp: Timestamp!
   token: PaymentToken!
-  total: BigInt! @aggregate(fn: "sum", arg: "balance")
+  # Running sum = live escrow balance.
+  totalBalance: BigInt! @aggregate(fn: "sum", arg: "balance")
+  # Running sum = cumulative gross paid into escrow.
+  totalAmountPaid: BigInt! @aggregate(fn: "sum", arg: "amountPaid")
 }
 ```
 
@@ -137,7 +145,7 @@ All numeric fields are stored as `BigInt` (raw integer units; bignumber-safe). T
 
 USD values shown on the dashboard (Total Volume, escrow display, fees) are computed at read time using the **current market value** of each token.
 
-- **Storage:** raw token amounts only — `VolumeStats.dailyVolume`, `EscrowStat.total`, and `FeePaidStats.totalFeePaid`, each keyed by `PaymentToken`. No USD value is persisted on-chain or in the subgraph.
+- **Storage:** raw token amounts only — `VolumeStats.dailyVolume`, `EscrowStat.totalBalance` / `EscrowStat.totalAmountPaid`, and `FeePaidStats.totalFeePaid`, each keyed by `PaymentToken`. No USD value is persisted on-chain or in the subgraph.
 - **Read path:** fetch the current market price for each held token from a third-party price service, multiply by the stored token amount, and sum across tokens to produce the displayed USD figure.
 - **Caching:** cache the price globally and reuse it across every metric in a render pass. Refresh on whatever cadence the price source justifies.
 - **Frontend rule:** the conversion happens once per render against the cached price; the frontend does not issue a price call per metric.
@@ -211,16 +219,18 @@ Guard against `W_prior == 0` (no activity in the prior window) before computing 
 
 ### Total Escrow Balance
 
-Live escrow balance tracked **per token** as signed deltas in `EscrowBalance`, rolled up into `EscrowStat.total`.
+Tracked **per token** in `EscrowBalance` via two parallel measures, rolled up into `EscrowStat`: a signed `balance` (the live escrow) and a positive `amountPaid` (gross inflow).
 
 - **Formula:**
-  - On payment: push `+amount` (raw token amount).
-  - On settlement: push the **negated** amount (`Refund`, `Disputed`-settled, `Release`) so the daily/hourly `sum` nets out to the live balance.
+  - On payment: push `balance += amount` and `amountPaid += amount` (raw token amount).
+  - On settlement (`Refund`, `Disputed`-settled, `Release`): push the **negated** amount to `balance` only (`amountPaid` is never decremented) so `totalBalance` nets out to the live balance while `totalAmountPaid` stays cumulative.
 - **Source events:** invoice `Paid`, `Refund`, `Disputed`-settled, `Release`.
 - **Amount source:** the amount is read from the invoice-level event payload, not from a contract balance call.
-- **Aggregation:** `EscrowStat.total` via `(fn: "sum", arg: "balance")` over its own signed-point timeseries — separate from `PaymentVolume`, which stays positive-only because volume is cumulative. `EscrowStat` is rolled up at both `hour` and `day` intervals; live escrow is the running sum across buckets.
-- **Increase/decrease rate:** tracked day-by-day (daily granularity), computed using the same windowed pattern as [Windowed Volume & Percentage Change](#windowed-volume--percentage-change).
-- **Display:** depends on the [USD Conversion](#usd-conversion) decision — convert the per-token balances on the read path.
+- **Aggregation:** `EscrowStat.totalBalance` via `(fn: "sum", arg: "balance")` and `EscrowStat.totalAmountPaid` via `(fn: "sum", arg: "amountPaid")`, rolled up at both `hour` and `day` intervals. Live escrow is the running sum of `totalBalance` across buckets.
+- **Display:**
+  - **Card value:** running sum of `totalBalance` (live balance), converted to USD on the read path.
+  - **Chart:** built from `totalAmountPaid` (cumulative gross paid into escrow).
+  - **% change:** day-over-day on the running `totalAmountPaid` (vs. yesterday), following the same windowed pattern as [Windowed Volume & Percentage Change](#windowed-volume--percentage-change). Tracked at daily granularity.
 
 ### Total Fees Paid
 
@@ -285,6 +295,26 @@ The subgraph-derived flow above is poll-based and reflects committed state only.
 ## Notes for Implementation
 
 - Update related metrics inside a single event-handler transaction so the aggregations stay internally consistent.
-- Settlement events (`Refund`, `Disputed`-settled, `Release`) must reverse escrow by pushing a negated `EscrowBalance` point. They do **not** push to `PaymentVolume` or affect `VolumeStats.invoicePaid` — both are cumulative.
 - For windowed/historical reads, query the daily aggregation buckets and sum the relevant windows on the client; closed daily buckets are immutable and safely cacheable, so only the current open bucket needs refreshing.
 - The frontend should never recompute USD values from raw token amounts directly; it consumes whichever USD representation results from the chosen conversion strategy.
+
+### Live updates from contract events
+
+The dashboard websocket and the subgraph mappings apply the **same** per-entity updates, decoded from the processor event ABIs in `payment-processor/src/interface` (`ISimplePaymentProcessor.sol`, `IAdvancedPaymentProcessor.sol`). The websocket subscribes to the contract events and applies each delta optimistically on top of the last snapshot; the subgraph re-derives the same values as the source of truth. Token rule throughout: the **simple** processor is native-only (its events carry no token field) — use `address(0)`; the **advanced** processor carries the token in the event params.
+
+Drive each entity from these events:
+
+- **Volume + invoices paid** (`PaymentVolume` → `VolumeStats.dailyVolume` / `VolumeStats.invoicePaid`) — on `InvoicePaid`:
+  - Simple `InvoicePaid(invoiceId, buyer, amountPaid, expiresAt)` → push a `PaymentVolume` point with token `address(0)`, amount `amountPaid`.
+  - Advanced `InvoicePaid(invoiceId, paymentToken, escrowAddress, amount, releaseAt)` → push a point with token `paymentToken`, amount `amount`.
+  - Each `InvoicePaid` adds one `PaymentVolume` point (drives `dailyVolume`) and increments the cumulative `invoicePaid` count.
+- **Escrow** (`EscrowBalance.balance` / `.amountPaid` → `EscrowStat.totalBalance` / `.totalAmountPaid`):
+  - On `InvoicePaid` push `balance += amount` and `amountPaid += amount` (same token/amount as above).
+  - On settlement push `balance -= amount` only (never `amountPaid`):
+    - Simple `InvoiceReleased(invoiceId, sellerAmount, fee)` → reduce by `sellerAmount + fee`; `InvoiceRefunded(invoiceId)` → reduce by the paid amount read from the stored invoice (the event carries no amount).
+    - Advanced `PaymentReleased(invoiceId, receiver, currency, sellerAmount, fee)` → token `currency`, reduce by `sellerAmount + fee`; `Refunded(invoiceId, amount)` → reduce by `amount`; `DisputeSettled(invoiceId, sellerAmount, buyerAmount, fee)` → reduce by `sellerAmount + buyerAmount + fee`.
+- **Fees** (`FeePaid` → `FeePaidStats.totalFeePaid`): add the emitted `fee` per token — simple `InvoiceReleased.fee`, advanced `PaymentReleased.fee` and `DisputeSettled.fee`. Skip zero-fee events.
+- **Invoice activity** (`InvoiceActivity` → `InvoiceActivityStats.totalActivity`): push one point per processor invoice event with `invoiceType` = `SIMPLE` / `ADVANCED` (the emitting contract identifies the processor).
+- **Users** (`NewUser` → `NewUserStats`, `ActiveUser` → `ActiveUserStats`): on `InvoiceCreated` register the seller as `CREATOR`; on `InvoicePaid` register the buyer as `PAYER` — push a `NewUser` point only the first time an address is seen for that role. For `ActiveUser`, on any invoice event touching a user, push at most one point per user per UTC day (deduped via `User.lastActiveDay`).
+- **Recent transactions** (`InvoiceEvent`): every processor event writes an `InvoiceEvent` row (`eventType`, `txHash`, `timestamp`, link to the simple/advanced invoice); the feed reads `INVOICE_PAID`, `INVOICE_REFUNDED` / `REFUNDED`, `INVOICE_RELEASED` / `PAYMENT_RELEASED`, and `DISPUTE_SETTLED`.
+- **Gas tracker** (`GasPaid`): not driven by invoice events — increment `amount` (by `gasPrice * gasLimit`) and `transactionCount` whenever a platform wallet sends a transaction.
