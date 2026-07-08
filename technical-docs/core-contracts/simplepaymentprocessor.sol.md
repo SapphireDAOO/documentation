@@ -19,44 +19,46 @@ You can find the full implementation [here](https://github.com/SapphireDAOO/paym
 
 ### State Variables
 
+The invoice status codes and retry/fee constants below are plain file-level constants imported from `constants/Simple.sol`, not `public` members of the contract itself — there is no on-chain getter like `SimplePaymentProcessor.CREATED()`.
+
 #### CREATED
 
-Status code representing that a payment or transaction has been created.
+Status code representing that an invoice has been created and is awaiting payment.
 
 ```solidity
-uint8 public constant CREATED = 1
+uint8 constant CREATED = 1;
 ```
 
 #### PAID
 
-Status code representing that a payment has been completed.
+Status code representing that an invoice has been paid by the buyer.
 
 ```solidity
-uint8 public constant PAID = CREATED + 1
+uint8 constant PAID = 2;
 ```
 
 #### ACCEPTED
 
-Status code representing that a payment or transaction has been accepted.
+Status code representing that a payment has been accepted by the seller.
 
 ```solidity
-uint8 public constant ACCEPTED = PAID + 1
+uint8 constant ACCEPTED = 3;
 ```
 
 #### REJECTED
 
-Status code representing that a payment or transaction has been rejected.
+Status code representing that a payment has been rejected by the seller.
 
 ```solidity
-uint8 public constant REJECTED = ACCEPTED + 1
+uint8 constant REJECTED = 4;
 ```
 
 #### CANCELED
 
-Status code representing that a payment or transaction has been canceled.
+Status code representing that an invoice has been canceled by the seller.
 
 ```solidity
-uint8 public constant CANCELED = REJECTED + 1
+uint8 constant CANCELED = 5;
 ```
 
 #### REFUNDED
@@ -64,31 +66,23 @@ uint8 public constant CANCELED = REJECTED + 1
 Status code representing that a payment has been refunded to the payer.
 
 ```solidity
-uint8 public constant REFUNDED = CANCELED + 1
+uint8 constant REFUNDED = 6;
 ```
 
 #### RELEASED
 
-Status code representing that a payment has been successfully released to the payee.
+Status code representing that a payment has been successfully released to the seller.
 
 ```solidity
-uint8 public constant RELEASED = REFUNDED + 1
+uint8 constant RELEASED = 7;
 ```
 
 #### LOCKED
 
-Invoice is permanently locked after all automated withdrawal retries (seller + buyer) failed.
+Invoice is permanently locked after all automated withdrawal retries failed.
 
 ```solidity
-uint8 public constant LOCKED = RELEASED + 1
-```
-
-#### MAX\_WITHDRAWAL\_RETRIES
-
-Maximum number of automated seller-payout retry attempts before falling back to a buyer refund.
-
-```solidity
-uint8 public constant MAX_WITHDRAWAL_RETRIES = 3
+uint8 constant LOCKED = 8;
 ```
 
 #### BASIS\_POINTS
@@ -96,7 +90,7 @@ uint8 public constant MAX_WITHDRAWAL_RETRIES = 3
 Basis points denominator used for percentage calculations (1% = 100).
 
 ```solidity
-uint256 public constant BASIS_POINTS = 10_000
+uint256 constant BASIS_POINTS = 10_000;
 ```
 
 #### SELLER\_DEFAULT\_DECISION\_WINDOW
@@ -104,7 +98,15 @@ uint256 public constant BASIS_POINTS = 10_000
 Default decision period for the seller after an invoice is paid.
 
 ```solidity
-uint256 public constant SELLER_DEFAULT_DECISION_WINDOW = 6 hours
+uint256 constant SELLER_DEFAULT_DECISION_WINDOW = 6 hours;
+```
+
+#### MAX\_WITHDRAWAL\_RETRIES
+
+Maximum number of automated withdrawal retry attempts before falling back (see [refundBuyer](#refundbuyer) and the automated-upkeep retry logic).
+
+```solidity
+uint8 constant MAX_WITHDRAWAL_RETRIES = 3;
 ```
 
 #### ppStorage
@@ -127,12 +129,12 @@ uint256 public decisionWindow
 
 #### constructor
 
-Initializes the payment processor with owner, fee settings, and default hold period.
+Initializes the payment processor with its storage and notes contract references.
 
-Sets the fee receiver address, the fee rate (in basis points), and the default escrow hold time.
+Sets `ppStorage` and `notes`, initializes `decisionWindow` to `SELLER_DEFAULT_DECISION_WINDOW`, and calls `setMinimumInvoiceValue`. Fee rate, fee receiver, and the default escrow hold period all live in `ppStorage`, not here.
 
 ```solidity
-constructor(address _paymentProcessorStorageAddress, uint256 _minimumInvoicePrice, address _notesAddress) ;
+constructor(address _paymentProcessorStorageAddress, uint256 _minimumInvoicePrice, address _notesAddress);
 ```
 
 **Parameters**
@@ -151,7 +153,7 @@ Optionally stores a reference to the user's off-chain notes file.
 
 ```solidity
 function createInvoice(uint256 _price, bytes memory _storageRef, bool _share)
-    external
+    public
     returns (uint216 invoiceId);
 ```
 
@@ -177,7 +179,7 @@ The caller must send enough ETH to cover the invoice price.
 
 ```solidity
 function pay(uint216 _invoiceId, bytes memory _storageRef, bool _share)
-    external
+    public
     payable
     returns (address escrowAddress);
 ```
@@ -192,18 +194,18 @@ function pay(uint216 _invoiceId, bytes memory _storageRef, bool _share)
 
 **Returns**
 
-|    Name   |    Type   |                             Description                             |
-| :-------: | :-------: | :-----------------------------------------------------------------: |
-| `escrow`  | `address` | The address of the escrow contract created for this payment. |
+|      Name       |    Type   |                             Description                             |
+| :---------------: | :-------: | :-----------------------------------------------------------------: |
+| `escrowAddress`  | `address` | The address of the escrow contract created for this payment. |
 
 #### acceptPayment
 
 Marks the specified invoice as accepted.
 
-This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event. It is expected that the creator is approving the payment for the invoice.
+This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event. Only callable by the invoice's seller, and only while the invoice is `PAID` and within the acceptance window (`expiresAt`); reverts with `AcceptanceWindowExceeded` once that window has passed.
 
 ```solidity
-function acceptPayment(uint216 _invoiceId) external;
+function acceptPayment(uint216 _invoiceId) public;
 ```
 
 **Parameters**
@@ -216,10 +218,10 @@ function acceptPayment(uint216 _invoiceId) external;
 
 Marks the specified invoice as rejected and refunds the payer.
 
-This function updates the invoice status to `REJECTED`, refunds the payer via the escrow contract, and emits the `InvoiceRejected` event.
+This function updates the invoice status to `REJECTED`, refunds the payer via the escrow contract, and emits the `InvoiceRejected` event. Same access-control/window rules as `acceptPayment` (seller only, within the acceptance window).
 
 ```solidity
-function rejectPayment(uint216 _invoiceId) external;
+function rejectPayment(uint216 _invoiceId) public;
 ```
 
 **Parameters**
@@ -248,8 +250,10 @@ function cancelInvoice(uint216 _invoiceId) external;
 
 Releases the funds held in escrow for a specific invoice to the seller.
 
+Only callable by the seller. Invoice must be in `ACCEPTED` state (reverts `InvalidInvoiceState` otherwise) and `releaseAt` must have passed (reverts `HoldPeriodHasNotBeenExceeded` otherwise). Deducts the platform fee before transferring the net amount to the seller.
+
 ```solidity
-function release(uint216 _invoiceId) external;
+function release(uint216 _invoiceId) public;
 ```
 
 **Parameters**
@@ -262,10 +266,10 @@ function release(uint216 _invoiceId) external;
 
 Refunds the buyer of a specific invoice when the seller fails to act in time.
 
-Invoice must be in PAID state and the decision window (`expiresAt`) must have elapsed. The invoice transitions to REFUNDED, removes it from the heap, zeroes the balance, and returns funds to the buyer.
+Invoice must be in `PAID` state and the decision window (`expiresAt`) must have elapsed, otherwise reverts with `InvoiceNotEligibleForRefund`. Attempts to withdraw the price to the buyer; on success the invoice transitions to `REFUNDED`, is removed from the heap, and its balance is zeroed. On withdrawal failure, the retry counter is incremented and the invoice stays `PAID` for a future retry; once retries would exceed `MAX_WITHDRAWAL_RETRIES`, the invoice is instead removed from the heap and transitions to `LOCKED` (recoverable only via [releaseLocked](#releaselocked)). Guarded by `nonReentrant`.
 
 ```solidity
-function refundBuyer(uint216 _invoiceId) external;
+function refundBuyer(uint216 _invoiceId) public nonReentrant;
 ```
 
 **Parameters**
@@ -278,10 +282,12 @@ function refundBuyer(uint216 _invoiceId) external;
 
 Recovers funds from a permanently locked invoice by sending them to a specified recipient.
 
-Only callable by an authorized address. Valid only for invoices in the `LOCKED` state. Transfers the full escrow balance to `_recipient` and transitions the invoice to `RELEASED`.
+Only callable by an authorized address (owner or storage contract). Valid only for invoices in the `LOCKED` state. Withdraws the caller-supplied `_amount` from escrow to `_recipient` and decrements the invoice's tracked `balance` by that amount — the caller is responsible for supplying the correct amount (use `getInvoiceData` to check the remaining escrow balance).
+
+**Note:** the code only flips the invoice's `state` to `RELEASED` on an in-memory copy when `_amount` exactly equals the remaining `balance`, and that assignment is never written back to storage — so on-chain, the invoice's persisted `state` remains `LOCKED` even after a full recovery. Only `balance` is actually updated in storage.
 
 ```solidity
-function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external;
+function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external onlyAuthorized;
 ```
 
 **Parameters**
@@ -316,6 +322,8 @@ function checkUpkeep(bytes calldata) external view returns (bool upkeepNeeded, b
 #### performUpkeep
 
 Performs the actual upkeep work, such as executing a function or releasing funds.
+
+Only callable by the owner or the configured forwarder address; reverts with `NotAuthorized` otherwise.
 
 ```solidity
 function performUpkeep(bytes calldata) external;
@@ -373,7 +381,7 @@ Updates the minimum allowed invoice value required for creating an invoice.
 Only callable by the owner or the storage contract.
 
 ```solidity
-function setMinimumInvoiceValue(uint256 _newMinimumInvoiceValue) external;
+function setMinimumInvoiceValue(uint256 _newMinimumInvoiceValue) public onlyAuthorized;
 ```
 
 **Parameters**
@@ -386,8 +394,10 @@ function setMinimumInvoiceValue(uint256 _newMinimumInvoiceValue) external;
 
 Updates the address of the forwarder contract used for relayed or automated calls.
 
+Only callable by the owner or the storage contract.
+
 ```solidity
-function setForwarderAddress(address _forwarderAddress) external;
+function setForwarderAddress(address _forwarderAddress) external onlyAuthorized;
 ```
 
 **Parameters**
@@ -400,8 +410,10 @@ function setForwarderAddress(address _forwarderAddress) external;
 
 Updates the decision window sellers have to accept payments after buyer payment.
 
+Only callable by the owner or the storage contract. Reverts with `InvalidDecisionWindow` if `_newDecisionWindow` is zero.
+
 ```solidity
-function setDecisionWindow(uint256 _newDecisionWindow) external;
+function setDecisionWindow(uint256 _newDecisionWindow) external onlyAuthorized;
 ```
 
 **Parameters**
@@ -443,7 +455,7 @@ function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceVa
 Retrieves detailed data for a specific invoice.
 
 ```solidity
-function getInvoiceData(uint216 _invoiceId) external view returns (Invoice memory i);
+function getInvoiceData(uint216 _invoiceId) public view returns (Invoice memory i);
 ```
 
 **Parameters**
@@ -488,6 +500,46 @@ function getItems() external view returns (uint216[] memory items);
 | :-----: | :---------: | :----------------: |
 | `items` | `uint216[]` | Array of task IDs. |
 
+### Structs
+
+#### Invoice
+
+Represents an invoice between a buyer and seller, with escrow, timestamps, and status tracking.
+
+```solidity
+struct Invoice {
+    uint216 invoiceNonce;
+    uint40 createdAt;
+    uint40 paidAt;
+    uint40 releaseAt;
+    uint40 invalidateAt;
+    uint40 expiresAt;
+    uint8 state;
+    uint8 withdrawalRetries;
+    address seller;
+    address buyer;
+    address escrow;
+    uint256 price;
+    uint256 balance;
+}
+```
+
+|        Field        |    Type   |                                                              Description                                                             |
+| :---------------------: | :-------: | :--------------------------------------------------------------------------------------------------------------------------------------: |
+|    `invoiceNonce`    | `uint216` |                                A unique identifier assigned to this invoice, typically sequentially.                                |
+|      `createdAt`     |  `uint40` |                                       The Unix timestamp when the invoice was created.                                        |
+|       `paidAt`       |  `uint40` |                                       The Unix timestamp when the payment was completed.                                      |
+|      `releaseAt`     |  `uint40` |                              The timestamp when funds in escrow can be released to the seller.                                |
+|    `invalidateAt`    |  `uint40` |                        The timestamp after which the invoice is considered invalid if unpaid.                                 |
+|      `expiresAt`     |  `uint40` | The timestamp after which the seller can no longer take action (accept/reject), and the buyer is refunded. |
+|        `state`       |  `uint8`  |                                          The current state of the invoice.                                                    |
+| `withdrawalRetries`  |  `uint8`  |     Number of failed `IEscrow.withdraw` attempts by the automation path. Packed with `state` in the same storage slot.        |
+|       `seller`       | `address` |                                     The address of the seller of the invoice.                                                 |
+|        `buyer`       | `address` |                                     The address of the buyer of the invoice.                                                  |
+|       `escrow`       | `address` |                    The address of the escrow contract managing the funds for this invoice.                                    |
+|        `price`       | `uint256` |                                       The total price of the invoice in wei.                                                  |
+|       `balance`      | `uint256` |                    The current amount held in escrow, net of any fees deducted upon acceptance. Zeroed on release or refund.   |
+
 ### Events
 
 #### InvoiceCreated
@@ -523,24 +575,26 @@ event InvoicePaid(uint216 indexed invoiceId, address indexed buyer, uint256 inde
 Emitted when an invoice is rejected by the seller.
 
 ```solidity
-event InvoiceRejected(uint216 indexed invoiceId);
+event InvoiceRejected(uint216 indexed invoiceId, uint256 amount);
 ```
 
 | Name        | Type      | Description                             |
 | :----------: | :-------: | :--------------------------------------: |
 | `invoiceId` | `uint216` | The unique ID of the rejected invoice.  |
+| `amount`    | `uint256` | The escrow balance refunded to the buyer in wei. |
 
 #### InvoiceRefunded
 
 Emitted when an invoice is refunded to the buyer.
 
 ```solidity
-event InvoiceRefunded(uint216 indexed invoiceId);
+event InvoiceRefunded(uint216 indexed invoiceId, uint256 amount);
 ```
 
 | Name        | Type      | Description                             |
 | :----------: | :-------: | :--------------------------------------: |
 | `invoiceId` | `uint216` | The unique ID of the refunded invoice.  |
+| `amount`    | `uint256` | The escrow balance refunded to the buyer in wei. |
 
 #### InvoiceAccepted
 
@@ -571,12 +625,14 @@ event InvoiceCanceled(uint216 indexed invoiceId);
 Emitted when an invoice is released (funds disbursed from escrow).
 
 ```solidity
-event InvoiceReleased(uint216 indexed invoiceId);
+event InvoiceReleased(uint216 indexed invoiceId, uint256 sellerAmount, uint256 fee);
 ```
 
-| Name        | Type      | Description                             |
-| :----------: | :-------: | :--------------------------------------: |
-| `invoiceId` | `uint216` | The unique ID of the released invoice.  |
+| Name           | Type      | Description                             |
+| :--------------: | :-------: | :--------------------------------------: |
+| `invoiceId`    | `uint216` | The unique ID of the released invoice.  |
+| `sellerAmount` | `uint256` | The net amount transferred to the seller, after fees. |
+| `fee`          | `uint256` | The platform fee deducted and sent to the fee receiver. |
 
 #### UpdateHoldPeriod
 
@@ -648,6 +704,6 @@ event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint2
 | `InvoiceIsNoLongerValid()` | Thrown when a payment is attempted after the invoice's payment validity window has expired. |
 | `AcceptanceWindowExceeded()` | Thrown when the seller attempts to take action on an invoice after the acceptance window has expired. |
 | `SellerCannotPayOwnedInvoice()` | Thrown when the seller of an invoice attempts to pay for their own invoice. |
-| `InvoiceNotEligibleForRefund()` | Thrown when a refund to the buyer cannot be issued. |
+| `InvoiceNotEligibleForRefund()` | Thrown when a refund to the buyer cannot be issued (invoice not `PAID` or decision window not yet elapsed). |
 | `HoldPeriodHasNotBeenExceeded()` | Thrown when the hold period for an invoice has not yet been exceeded. |
-| `EscrowWithdrawFailed()` | Thrown when the escrow contract fails to execute a withdrawal. |
+| `EscrowWithdrawFailed()` | Thrown when the escrow withdrawal fails during a manual release, reject, or refund. |

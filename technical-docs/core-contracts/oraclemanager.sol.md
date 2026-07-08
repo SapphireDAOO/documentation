@@ -136,6 +136,22 @@ struct PriceFeedConfig {
 | `aggregator` | `address` | Address of the Chainlink AggregatorV3 contract. Set to `address(0)` to disable the token.                                   |
 | `heartbeat`  |  `uint96` | Maximum acceptable age (in seconds) of a price update before it is considered stale. Should match the feed's update interval. |
 
+### Events
+
+#### PriceFeedSet
+
+Emitted when the price feed configuration for a token is updated.
+
+```solidity
+event PriceFeedSet(address indexed token, address indexed aggregator, uint96 heartbeat);
+```
+
+|     Name     |    Type   |                                Description                               |
+| :-----------: | :-------: | :--------------------------------------------------------------------------: |
+|    `token`    | `address` | The payment token address (`address(0)` for the native currency). |
+| `aggregator` | `address` |    The Chainlink aggregator address (`address(0)` removes the token).    |
+| `heartbeat`  |  `uint96` |          The maximum acceptable age (in seconds) of a price update.       |
+
 ### Errors
 
 | Error | Description |

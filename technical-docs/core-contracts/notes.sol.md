@@ -62,7 +62,6 @@ Create a note under an order.
 ```solidity
 function createNote(uint216 _invoiceId, address _author, bytes calldata _encryptedContent, bool _share)
     external
-    override
     onlyAuthorized
     returns (uint256 noteId);
 ```
@@ -71,7 +70,7 @@ function createNote(uint216 _invoiceId, address _author, bytes calldata _encrypt
 
 |         Name        |    Type   |                  Description                 |
 | :-----------------: | :-------: | :------------------------------------------: |
-|     `_invoiceId`    | `uint216` |               Order identifier.              |
+|     `_invoiceId`    | `uint216` |              Invoice identifier.             |
 |      `_author`      | `address` |                 Note author.                 |
 | `_encryptedContent` |  `bytes`  |            Encrypted note payload.           |
 |       `_share`      |   `bool`  | Whether the note is shared with non-authors. |
@@ -89,7 +88,7 @@ Mark a note as opened for an account.
 Only authorized callers can update opened state. Reverts with Unauthorized if the note is not shared — opened state can only be tracked for shared notes.
 
 ```solidity
-function setOpened(uint216 _invoiceId, address _account, uint256 _noteId) external;
+function setOpened(uint216 _invoiceId, address _account, uint256 _noteId) external onlyAuthorized;
 ```
 
 **Parameters**
@@ -105,14 +104,14 @@ function setOpened(uint216 _invoiceId, address _account, uint256 _noteId) extern
 Get the total number of notes for an order.
 
 ```solidity
-function getNoteCount(uint216 _invoiceId) external view override returns (uint256 totalNotes);
+function getNoteCount(uint216 _invoiceId) external view returns (uint256 totalNotes);
 ```
 
 **Parameters**
 
-|     Name     |    Type   |    Description    |
-| :----------: | :-------: | :---------------: |
-| `_invoiceId` | `uint216` | Order identifier. |
+|     Name     |    Type   |     Description      |
+| :----------: | :-------: | :---------------------: |
+| `_invoiceId` | `uint216` | Invoice identifier. |
 
 **Returns**
 
@@ -125,14 +124,14 @@ function getNoteCount(uint216 _invoiceId) external view override returns (uint25
 Check if a note is opened for a specific user.
 
 ```solidity
-function isOpened(uint216 _invoiceId, uint256 _noteId, address _user) external view override returns (bool isOpen);
+function isOpened(uint216 _invoiceId, uint256 _noteId, address _user) external view returns (bool isOpen);
 ```
 
 **Parameters**
 
-|     Name     |    Type   |    Description    |
-| :----------: | :-------: | :---------------: |
-| `_invoiceId` | `uint216` | Order identifier. |
+|     Name     |    Type   |     Description      |
+| :----------: | :-------: | :---------------------: |
+| `_invoiceId` | `uint216` | Invoice identifier. |
 |   `_noteId`  | `uint256` |  Note identifier. |
 |    `_user`   | `address` | Address to check. |
 
@@ -155,9 +154,9 @@ function getNote(uint216 _invoiceId, uint256 _noteId)
 
 **Parameters**
 
-|     Name     |    Type   |    Description    |
-| :----------: | :-------: | :---------------: |
-| `_invoiceId` | `uint216` | Order identifier. |
+|     Name     |    Type   |     Description      |
+| :----------: | :-------: | :---------------------: |
+| `_invoiceId` | `uint216` | Invoice identifier. |
 |   `_noteId`  | `uint256` |  Note identifier. |
 
 **Returns**
@@ -174,7 +173,7 @@ function getNote(uint216 _invoiceId, uint256 _noteId)
 
 Updates the active note encryption version.
 
-This affects only notes created after the update. Existing notes retain their original version and remain decryptable using the encrypter associated with their stored version.
+Only callable by the owner of `ppStorage` — this checks the storage owner directly, bypassing the `_authorized` allowlist used by `createNote`/`setOpened`. This affects only notes created after the update. Existing notes retain their original version and remain decryptable using the encrypter associated with their stored version.
 
 ```solidity
 function updateVersion(uint8 _newVersion) external;
@@ -190,6 +189,8 @@ function updateVersion(uint8 _newVersion) external;
 
 Updates the authorization status for a user.
 
+Only callable by the owner of `ppStorage` — this checks the storage owner directly, bypassing the `_authorized` allowlist itself (it's what maintains that allowlist).
+
 ```solidity
 function setAuthorized(address _user, bool _enabled) external;
 ```
@@ -203,9 +204,17 @@ function setAuthorized(address _user, bool _enabled) external;
 
 #### getCurrentVersion
 
+Returns the active note encryption version.
+
 ```solidity
 function getCurrentVersion() external view returns (uint8 v);
 ```
+
+**Returns**
+
+| Name |  Type  |          Description          |
+| :--: | :----: | :-------------------------------: |
+| `v` | `uint8` | The current note version. |
 
 ### Structs
 

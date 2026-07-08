@@ -2,7 +2,7 @@
 
 ## Advanced Payment Processor
 
-The⁣`IAdvancedPaymentProcessor` is an interface designed to support creating, managing, and settling payments between sellers and buyers using the marketplace with the following features:
+The `AdvancedPaymentProcessor` contract supports creating, managing, and settling payments between sellers and buyers via the marketplace, with the following features:
 
 * Meta invoice and sub-invoice
 * Dispute resolution
@@ -20,15 +20,25 @@ You can find the full code implementation [here](https://github.com/SapphireDAOO
 Reference to the external Payment Processor storage contract.
 
 ```solidity
-IPaymentProcessorStorage public ppStorage
+IPaymentProcessorStorage public immutable ppStorage
 ```
+
+#### oracle
+
+OracleManager used to convert USD-denominated invoice prices into payment-token amounts. Not immutable — updatable via `setOracle`.
+
+```solidity
+IOracleManager public oracle
+```
+
+The invoice status codes and fee/decimal constants below are plain file-level constants imported from `constants/Advanced.sol`, not `public` members of the contract itself — there is no on-chain getter like `AdvancedPaymentProcessor.CREATED()`. Note also that `constants/Advanced.sol` additionally defines `LOCKED = 10` and `MAX_WITHDRAWAL_RETRIES = 3`, but this contract does **not** import or use either — there is no automated retry/locking path here (unlike `SimplePaymentProcessor`); releases and refunds are always triggered manually by the marketplace.
 
 #### CREATED
 
 Invoice has been created but no payment has been made yet.
 
 ```solidity
-uint8 public constant CREATED = 1
+uint8 constant CREATED = 1;
 ```
 
 #### PAID
@@ -36,31 +46,31 @@ uint8 public constant CREATED = 1
 Invoice has been paid by the buyer.
 
 ```solidity
-uint8 public constant PAID = CREATED + 1
+uint8 constant PAID = 2;
 ```
 
 #### REFUNDED
 
-Invoice has been refunded to the buyer (e.g., after expiration or rejection).
+Invoice has been refunded to the buyer.
 
 ```solidity
-uint8 public constant REFUNDED = PAID + 1
+uint8 constant REFUNDED = 3;
 ```
 
 #### CANCELED
 
-Seller has canceled the invoice before payment.
+Seller has canceled the invoice.
 
 ```solidity
-uint8 public constant CANCELED = REFUNDED + 1
+uint8 constant CANCELED = 4;
 ```
 
 #### DISPUTED
 
-Buyer has raised a dispute after payment.
+Buyer has raised a dispute.
 
 ```solidity
-uint8 public constant DISPUTED = CANCELED + 1
+uint8 constant DISPUTED = 5;
 ```
 
 #### DISPUTE\_RESOLVED
@@ -68,7 +78,7 @@ uint8 public constant DISPUTED = CANCELED + 1
 Dispute has been resolved in full favor of both parties.
 
 ```solidity
-uint8 public constant DISPUTE_RESOLVED = DISPUTED + 1
+uint8 constant DISPUTE_RESOLVED = 6;
 ```
 
 #### DISPUTE\_DISMISSED
@@ -76,7 +86,7 @@ uint8 public constant DISPUTE_RESOLVED = DISPUTED + 1
 Dispute has been dismissed without changes to payouts.
 
 ```solidity
-uint8 public constant DISPUTE_DISMISSED = DISPUTE_RESOLVED + 1
+uint8 constant DISPUTE_DISMISSED = 7;
 ```
 
 #### DISPUTE\_SETTLED
@@ -84,31 +94,15 @@ uint8 public constant DISPUTE_DISMISSED = DISPUTE_RESOLVED + 1
 Dispute has been settled with a split payout.
 
 ```solidity
-uint8 public constant DISPUTE_SETTLED = DISPUTE_DISMISSED + 1
+uint8 constant DISPUTE_SETTLED = 8;
 ```
 
 #### RELEASED
 
-Payment has been released to the seller after the hold period or dispute resolution.
+Payment has been released to the seller after acceptance or resolution.
 
 ```solidity
-uint8 public constant RELEASED = DISPUTE_SETTLED + 1
-```
-
-#### LOCKED
-
-Invoice is permanently locked after all automated withdrawal retries (seller + buyer) failed.
-
-```solidity
-uint8 public constant LOCKED = RELEASED + 1
-```
-
-#### MAX\_WITHDRAWAL\_RETRIES
-
-Maximum number of automated seller-payout retry attempts before falling back to a buyer refund.
-
-```solidity
-uint8 public constant MAX_WITHDRAWAL_RETRIES = 3
+uint8 constant RELEASED = 9;
 ```
 
 #### BASIS\_POINTS
@@ -116,15 +110,15 @@ uint8 public constant MAX_WITHDRAWAL_RETRIES = 3
 Total basis points used for percentage calculations. 10\_000 = 100%.
 
 ```solidity
-uint256 public constant BASIS_POINTS = 10_000
+uint256 constant BASIS_POINTS = 10_000;
 ```
 
 #### DEFAULT\_DECIMAL
 
-Default number of decimals used for internal fixed-point arithmetic (e.g., 1e18 = 1.0)
+Default number of decimals used for internal fixed-point arithmetic (e.g., 1e18 = 1.0). Also used as the ERC20 decimals fallback in `_getDecimals`.
 
 ```solidity
-uint8 public constant DEFAULT_DECIMAL = 18
+uint8 constant DEFAULT_DECIMAL = 18;
 ```
 
 #### DEFAULT\_MINIMUM\_INVOICE\_PRICE
@@ -132,15 +126,7 @@ uint8 public constant DEFAULT_DECIMAL = 18
 Minimum invoice price applied when none is explicitly set (1 USD in 8-decimal Chainlink format).
 
 ```solidity
-uint256 public constant DEFAULT_MINIMUM_INVOICE_PRICE = 1e8
-```
-
-#### SEQUENCER\_GRACE\_PERIOD
-
-Minimum time (in seconds) to wait after the sequencer restarts before trusting price data. Protects against stale prices that accumulated while the sequencer was offline.
-
-```solidity
-uint256 public constant SEQUENCER_GRACE_PERIOD = 1 hours
+uint256 constant DEFAULT_MINIMUM_INVOICE_PRICE = 1e8;
 ```
 
 ### Functions
@@ -169,6 +155,7 @@ Only callable by the marketplace contract.
 ```solidity
 function createSingleInvoice(InvoiceCreationParam memory _param)
     external
+    onlyMarketplace
     returns (uint216 invoiceId);
 ```
 
@@ -193,6 +180,7 @@ Only callable by the marketplace contract. Each sub-invoice is created using the
 ```solidity
 function createMetaInvoice(InvoiceCreationParam[] memory _param)
     external
+    onlyMarketplace
     returns (uint216 metaInvoiceId);
 ```
 
@@ -212,10 +200,10 @@ function createMetaInvoice(InvoiceCreationParam[] memory _param)
 
 Pays a single invoice using native ETH or an approved ERC20 token.
 
-Caller must be the invoice buyer. Use `address(0)` for native payments.
+Any caller other than the invoice's seller may pay — the payer becomes the invoice's `buyer` (there's no pre-existing buyer requirement; reverts with `BuyerCannotBeSeller` only if the caller is the seller). Use `address(0)` for native payments. Guarded by `nonReentrant`.
 
 ```solidity
-function payInvoice(uint216 _invoiceId, address _paymentToken) external payable;
+function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant;
 ```
 
 **Parameters**
@@ -229,10 +217,10 @@ function payInvoice(uint216 _invoiceId, address _paymentToken) external payable;
 
 Pays all sub-invoices in a meta-invoice using native ETH.
 
-Caller must send exactly the oracle-converted total for the meta-invoice price. Any dust from per-sub-invoice integer rounding is refunded to the caller. Canceled sub-invoices are automatically excluded. Sub-invoices not in CREATED state are silently skipped.
+Caller must send exactly the oracle-converted total for the meta-invoice price. Any dust from per-sub-invoice integer rounding is refunded to the caller. Canceled sub-invoices are automatically excluded. Sub-invoices not in CREATED state are silently skipped. Guarded by `nonReentrant`.
 
 ```solidity
-function payMetaInvoiceWithValue(uint216 _invoiceId) external payable;
+function payMetaInvoiceWithValue(uint216 _invoiceId) external payable nonReentrant;
 ```
 
 **Parameters**
@@ -245,10 +233,10 @@ function payMetaInvoiceWithValue(uint216 _invoiceId) external payable;
 
 Pays all sub-invoices in a meta invoice using native ETH or ERC20.
 
-Caller must be the buyer of all sub-invoices. Canceled sub-invoices are automatically excluded. Sub-invoices not in CREATED state are silently skipped.
+Canceled sub-invoices are automatically excluded. Sub-invoices not in CREATED state are silently skipped. Guarded by `nonReentrant`.
 
 ```solidity
-function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external;
+function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonReentrant;
 ```
 
 **Parameters**
@@ -262,10 +250,10 @@ function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external;
 
 Creates a dispute for an invoice.
 
-Callable only by the marketplace. Only valid for invoices in the PAID state. Removes the invoice from the auto-release queue, canceling the pending release timer until the dispute is resolved or dismissed.
+Callable only by the marketplace. Only valid for invoices in the PAID state (reverts `InvalidInvoiceState` otherwise). Transitions the invoice to DISPUTED, blocking `release` until the dispute is resolved, dismissed, or settled. There is no automated release queue/heap in this contract — release only ever happens via an explicit marketplace call.
 
 ```solidity
-function createDispute(uint216 _invoiceId) external;
+function createDispute(uint216 _invoiceId) external onlyMarketplace;
 ```
 
 **Parameters**
@@ -281,7 +269,7 @@ handle a dispute on a given invoice.
 Callable only by the marketplace. Must be called after a dispute is created. The resolution can be DISPUTE\_DISMISSED, or DISPUTE\_SETTLED. If settled, the seller and buyer receive a split of the funds based on sellerShare.
 
 ```solidity
-function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare) external;
+function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare) external onlyMarketplace;
 ```
 
 **Parameters**
@@ -296,10 +284,10 @@ function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerSha
 
 Releases escrowed funds to the seller after the release window has passed.
 
-Callable only by the marketplace. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached. Platform fees are deducted before the net amount is transferred to the seller. The invoice transitions to RELEASED, its balance is zeroed, and it is removed from the auto-release heap.
+Callable only by the marketplace. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller. The invoice transitions to RELEASED and its balance is zeroed. There is no heap — this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
 
 ```solidity
-function release(uint216 _invoiceId) external;
+function release(uint216 _invoiceId) external onlyMarketplace;
 ```
 
 **Parameters**
@@ -310,10 +298,10 @@ function release(uint216 _invoiceId) external;
 
 #### refund
 
-Issues a refund for a given order.
+Issues a partial or full refund for a paid invoice. Callable only by the marketplace; invoice must be in the PAID state. `_refundShare` must be between 1 and 10,000 basis points. A full refund (10,000 BPS) transitions the invoice to REFUNDED; a partial refund reduces the escrow balance but leaves the invoice in PAID state so it can still be released later.
 
 ```solidity
-function refund(uint216 _invoiceId, uint256 _refundShare) external;
+function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketplace;
 ```
 
 **Parameters**
@@ -330,7 +318,7 @@ Cancels a single invoice before payment.
 Callable only by the marketplace. If the invoice belongs to a meta-invoice, the meta-invoice total price is reduced accordingly. Only valid for invoices in the CREATED state.
 
 ```solidity
-function cancelInvoice(uint216 _invoiceId) public;
+function cancelInvoice(uint216 _invoiceId) public onlyMarketplace;
 ```
 
 **Parameters**
@@ -346,7 +334,7 @@ Finalizes a dispute and marks the invoice as resolved.
 Callable only by the marketplace after a dispute has been raised by the buyer. This function is used when both parties (buyer and seller) have come to an agreement without requiring arbitration, or when the dispute period has expired with no further action. Transitions the invoice state from DISPUTED to DISPUTE\_RESOLVED.
 
 ```solidity
-function resolveDispute(uint216 _invoiceId) external;
+function resolveDispute(uint216 _invoiceId) external onlyMarketplace;
 ```
 
 **Parameters**
@@ -355,67 +343,14 @@ function resolveDispute(uint216 _invoiceId) external;
 | :----------: | :-------: | :--------------------------------------------: |
 | `_invoiceId` | `uint216` | The unique identifier of the disputed invoice. |
 
-#### releaseLocked
-
-Recovers funds from a permanently locked invoice by sending them to a specified recipient.
-
-Only callable by the contract owner. Valid only for invoices in the `LOCKED` state. Transfers the full escrow balance to `_recipient` and transitions the invoice to `RELEASED`.
-
-```solidity
-function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external;
-```
-
-**Parameters**
-
-|     Name     |    Type   |                           Description                          |
-| :----------: | :-------: | :------------------------------------------------------------: |
-| `_invoiceId` | `uint216` | The ID of the locked invoice.                                  |
-| `_recipient` | `address` | The address to receive the recovered funds.                    |
-|  `_amount`   | `uint256` | The amount to transfer from the escrow.                        |
-
-#### checkUpkeep
-
-Checks if upkeep is needed.
-
-```solidity
-function checkUpkeep(bytes calldata) external view returns (bool upkeepNeeded, bytes memory performData);
-```
-
-**Parameters**
-
-|   Name   |   Type  | Description |
-| :------: | :-----: | :---------: |
-| `<none>` | `bytes` |             |
-
-**Returns**
-
-|      Name      |   Type  |                          Description                         |
-| :------------: | :-----: | :----------------------------------------------------------: |
-| `upkeepNeeded` |  `bool` | Boolean indicating whether `performUpkeep` should be called. |
-|  `performData` | `bytes` |     Data to pass to `performUpkeep` if upkeep is needed.     |
-
-#### performUpkeep
-
-Performs the actual upkeep work, such as executing a function or releasing funds.
-
-```solidity
-function performUpkeep(bytes calldata) external;
-```
-
-**Parameters**
-
-|   Name   |   Type  | Description |
-| :------: | :-----: | :---------: |
-| `<none>` | `bytes` |             |
-
 #### setInvoiceReleaseTime
 
 Sets a custom release time for a given invoice by adding a hold period to the current timestamp.
 
-Callable only by the owner. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state (i.e., invoices currently tracked in the heap).
+Callable only by the owner. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state.
 
 ```solidity
-function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external;
+function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external onlyOwner;
 ```
 
 **Parameters**
@@ -425,26 +360,28 @@ function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external
 |  `_invoiceId` | `uint216` |                   The ID of the invoice to update.                   |
 | `_holdPeriod` | `uint256` | Additional hold period (in seconds) to add to the current timestamp. |
 
-#### setForwarderAddress
+#### setOracle
 
-Updates the address of the forwarder contract used for relayed or automated calls.
+Updates the OracleManager contract used for token price conversions.
+
+Only callable by the owner. Reverts with `InvalidOracle` if `_oracle` is the zero address.
 
 ```solidity
-function setForwarderAddress(address _forwarderAddress) external;
+function setOracle(address _oracle) external onlyOwner;
 ```
 
 **Parameters**
 
-|         Name        |    Type   |                  Description                  |
-| :-----------------: | :-------: | :-------------------------------------------: |
-| `_forwarderAddress` | `address` | The new forwarder contract address to be set. |
+|   Name    |   Type    |                       Description                      |
+| :--------: | :-------: | :--------------------------------------------------------: |
+| `_oracle` | `address` | The address of the new OracleManager contract. |
 
 #### setMinimumPrice
 
 Sets the minimum USD price an invoice must have to be created.
 
 ```solidity
-function setMinimumPrice(uint256 _newMinimumPrice) external;
+function setMinimumPrice(uint256 _newMinimumPrice) external onlyOwner;
 ```
 
 **Parameters**
@@ -452,20 +389,6 @@ function setMinimumPrice(uint256 _newMinimumPrice) external;
 |         Name         |    Type   |                                      Description                                     |
 | :------------------: | :-------: | :----------------------------------------------------------------------------------: |
 | `_newMinimumPrice`   | `uint256` | The new minimum price threshold (8 decimals, same unit as invoice prices). |
-
-#### getForwarder
-
-Returns the address of the configured forwarder contract.
-
-```solidity
-function getForwarder() external view returns (address forwarderAddress);
-```
-
-**Returns**
-
-|        Name        |    Type   |            Description            |
-| :----------------: | :-------: | :-------------------------------: |
-| `forwarderAddress` | `address` | The configured forwarder address. |
 
 #### getMinimumPrice
 
@@ -598,21 +521,107 @@ function getNextMetaInvoiceNonce() external view returns (uint216 nextMetaInvoic
 | :---------------------: | :-------: | :--------------------------------: |
 | `nextMetaInvoiceNonce`  | `uint216` | The next meta-invoice nonce value. |
 
-#### getItems
+#### \_getDecimals
 
-Returns a list of all task IDs currently in the heap.
-
-Retrieves the uint216 task identifiers extracted from the internal encoded heap structure.
+Returns the decimal precision of an ERC20 token by calling its `decimals()` function. Declared `public`, so it's part of the contract's ABI despite the underscore-prefixed name. Falls back to `DEFAULT_DECIMAL` (18) if the call fails or the token doesn't implement `decimals()`.
 
 ```solidity
-function getItems() external view returns (uint216[] memory items);
+function _getDecimals(address _token) public view returns (uint8 tokenDecimals);
 ```
+
+**Parameters**
+
+|   Name   |   Type    |                Description                |
+| :-------: | :-------: | :-------------------------------------------: |
+| `_token` | `address` | The address of the ERC20 token. |
 
 **Returns**
 
-|   Name  |     Type    |     Description    |
-| :-----: | :---------: | :----------------: |
-| `items` | `uint216[]` | Array of task IDs. |
+|        Name       |   Type  |               Description              |
+| :------------------: | :-----: | :----------------------------------------: |
+| `tokenDecimals` | `uint8` | The number of decimals the token uses. |
+
+### Structs
+
+#### Invoice
+
+Represents a single invoice created by a buyer to pay a seller, with escrow and payment tracking.
+
+```solidity
+struct Invoice {
+    uint216 invoiceNonce;
+    uint40 paidAt;
+    uint40 createdAt;
+    uint40 releaseAt;
+    uint40 expiresAt;
+    uint8 state;
+    uint8 withdrawalRetries;
+    uint32 escrowHoldPeriod;
+    uint216 metaInvoiceId;
+    address buyer;
+    address seller;
+    address escrow;
+    address paymentToken;
+    uint256 amountPaid;
+    uint256 price;
+    uint256 balance;
+}
+```
+
+|         Field         |    Type   |                                                                Description                                                              |
+| :----------------------: | :-------: | :-------------------------------------------------------------------------------------------------------------------------------------------: |
+|     `invoiceNonce`     | `uint216` |                                  A unique identifier assigned to this invoice, typically sequentially.                                 |
+|         `paidAt`       |  `uint40` |                                            Timestamp when the payment was made.                                          |
+|       `createdAt`      |  `uint40` |                                            Timestamp when the invoice was created.                                       |
+|       `releaseAt`      |  `uint40` |                                The timestamp when funds in escrow can be released to the seller.                         |
+|       `expiresAt`      |  `uint40` |                                     The timestamp after which the invoice is no longer payable.                          |
+|         `state`        |  `uint8`  |                                                 Current state of the invoice.                                            |
+|  `withdrawalRetries`   |  `uint8`  | Reserved retry counter retained for storage-layout compatibility; unused now that releases are manual. Packed with `state`. |
+|   `escrowHoldPeriod`   | `uint32`  | Custom hold duration (in seconds) between payment and release, set at invoice creation. When non-zero, overrides the storage default. |
+|     `metaInvoiceId`    | `uint216` |              Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.                        |
+|         `buyer`        | `address` |                                              Address of the buyer.                                                       |
+|        `seller`        | `address` |                                              Address of the seller.                                                      |
+|        `escrow`        | `address` |                              Address of the escrow contract holding the funds.                                           |
+|      `paymentToken`    | `address` |                       Token used for payment. Address zero for native currency.                                         |
+|      `amountPaid`      | `uint256` |            Total amount paid by the buyer for this invoice, in the payment token (native token if `paymentToken == address(0)`).       |
+|         `price`        | `uint256` |                                    Invoice amount expressed in USD (8 decimals).                                         |
+|        `balance`       | `uint256` |             Current balance of the escrow associated with the order, accounting for total amount paid minus refunds or releases.        |
+
+#### MetaInvoice
+
+Represents a collection of sub-invoices grouped into a single meta-invoice for batch payment and tracking.
+
+```solidity
+struct MetaInvoice {
+    uint256 price;
+    uint216[] subInvoiceIds;
+}
+```
+
+|      Field       |    Type     |                        Description                       |
+| :-----------------: | :---------: | :----------------------------------------------------------: |
+|      `price`      |  `uint256`  |     Total price of all sub-invoices under this meta invoice. |
+| `subInvoiceIds`   | `uint216[]` |    List of sub-invoice IDs grouped under this meta invoice.   |
+
+#### InvoiceCreationParam
+
+Parameters used to create a new invoice or sub-invoice.
+
+```solidity
+struct InvoiceCreationParam {
+    string invoiceId;
+    address seller;
+    uint256 price;
+    uint32 escrowHoldPeriod;
+}
+```
+
+|       Field        |    Type   |                                                    Description                                                   |
+| :-------------------: | :-------: | :------------------------------------------------------------------------------------------------------------------: |
+|     `invoiceId`     |  `string` |             A unique string identifier for the invoice, provided by the caller and hashed for use in the contract.   |
+|       `seller`      | `address` |                                          Address of the seller.                                          |
+|       `price`       | `uint256` |                     Price or amount to be paid for the invoice in USD (8 decimals).                     |
+| `escrowHoldPeriod`  |  `uint32` |            Duration (in seconds) that the escrow will lock the payment before it's releasable.          |
 
 ### Events
 
@@ -663,7 +672,7 @@ event InvoicePaid(uint216 indexed invoiceId, address paymentToken, address escro
 Emitted when escrowed funds for an invoice are released.
 
 ```solidity
-event PaymentReleased(uint216 indexed invoiceId, address receiver, address currency, uint256 sellerAmount);
+event PaymentReleased(uint216 indexed invoiceId, address receiver, address currency, uint256 sellerAmount, uint256 fee);
 ```
 
 | Name           | Type      | Description                                                        |
@@ -671,7 +680,8 @@ event PaymentReleased(uint216 indexed invoiceId, address receiver, address curre
 | `invoiceId`    | `uint216` | The unique identifier of the invoice.                              |
 | `receiver`     | `address` | The address that receives the released funds (typically the seller). |
 | `currency`     | `address` | The address of the token used for payment (address(0) for ETH).   |
-| `sellerAmount` | `uint256` | The amount transferred to the receiver.                            |
+| `sellerAmount` | `uint256` | The net amount transferred to the receiver, after fees.           |
+| `fee`          | `uint256` | The platform fee deducted and sent to the fee receiver.           |
 
 #### Refunded
 
@@ -739,14 +749,15 @@ event DisputeResolved(uint216 indexed invoiceId);
 Emitted when a dispute is settled and the funds are split between buyer and seller.
 
 ```solidity
-event DisputeSettled(uint216 indexed invoiceId, uint256 sellerAmount, uint256 buyerAmount);
+event DisputeSettled(uint216 indexed invoiceId, uint256 sellerAmount, uint256 buyerAmount, uint256 fee);
 ```
 
 | Name           | Type      | Description                               |
 | :-------------: | :-------: | :----------------------------------------: |
 | `invoiceId`    | `uint216` | The ID of the invoice that was disputed.  |
-| `sellerAmount` | `uint256` | The amount transferred to the seller.     |
+| `sellerAmount` | `uint256` | The net amount transferred to the seller, after fees. |
 | `buyerAmount`  | `uint256` | The amount refunded to the buyer.         |
+| `fee`          | `uint256` | The platform fee deducted from the seller's share and sent to the fee receiver. |
 
 #### UpdateReleaseTime
 
@@ -761,24 +772,9 @@ event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
 | `invoiceId`     | `uint216` | The unique identifier of the invoice whose release time was modified. |
 | `newHoldPeriod` | `uint256` | The updated escrow hold duration in seconds.                       |
 
-#### WithdrawalRetried
-
-Emitted when an automated withdrawal attempt fails and is retried.
-
-```solidity
-event WithdrawalRetried(uint216 indexed invoiceId, address indexed recipient, uint256 amount, uint8 attempt);
-```
-
-| Name        | Type      | Description                                         |
-| :----------: | :-------: | :--------------------------------------------------: |
-| `invoiceId` | `uint216` | The ID of the invoice whose withdrawal was retried. |
-| `recipient` | `address` | The address the withdrawal was attempted to.        |
-| `amount`    | `uint256` | The amount that failed to transfer.                 |
-| `attempt`   | `uint8`   | The retry attempt number.                           |
-
 #### LockedPaymentRecovered
 
-Emitted when a locked invoice's funds are manually recovered by the owner.
+Declared in `IAdvancedPaymentProcessor` but **never emitted** by this contract — there is no `releaseLocked`-equivalent function here (unlike `SimplePaymentProcessor`), so this event is currently unreachable dead ABI surface.
 
 ```solidity
 event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
@@ -790,12 +786,41 @@ event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipien
 | `recipient` | `address` | The address that received the recovered funds.    |
 | `amount`    | `uint256` | The amount of funds recovered.                    |
 
+#### TransferFailed
+
+Emitted when a best-effort fee or payout transfer fails during release or dispute settlement. Does not revert the calling transaction — funds remain in escrow for later manual recovery.
+
+```solidity
+event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
+```
+
+| Name        | Type      | Description                                  |
+| :----------: | :-------: | :-------------------------------------------: |
+| `invoiceId` | `uint216` | The invoice whose fee transfer failed. |
+| `recipient` | `address` | The intended recipient of the failed transfer. |
+| `amount`    | `uint256` | The amount that could not be transferred. |
+
+#### OracleUpdated
+
+Emitted when the OracleManager contract is updated via `setOracle`.
+
+```solidity
+event OracleUpdated(address indexed previousOracle, address indexed newOracle);
+```
+
+| Name        | Type      | Description                                  |
+| :----------: | :-------: | :-------------------------------------------: |
+| `previousOracle` | `address` | The previously configured OracleManager address. |
+| `newOracle`      | `address` | The newly configured OracleManager address. |
+
 ### Errors
 
 | Error | Description |
 | :----: | :----------: |
 | `UnsupportedToken()` | Thrown when a payment is attempted with a token not supported by the processor. |
 | `InvoiceExpired()` | Thrown when a payment is attempted on an invoice that has passed its expiry timestamp. |
+| `StalePrice()` | Thrown when the Chainlink round is incomplete (`answeredInRound < roundId`). |
+| `SequencerDown()` | Thrown when the L2 sequencer is down or still within the post-restart grace period. |
 | `EmptyMetaInvoice()` | Thrown when a meta-invoice is created with an empty sub-invoice list. |
 | `StalePriceFeed()` | Thrown when the Chainlink price feed is stale and cannot be trusted. |
 | `InvalidPrice()` | Thrown when the Chainlink price feed returns a zero or negative answer. |
@@ -812,5 +837,6 @@ event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipien
 | `MetaInvoiceAlreadyExists()` | Thrown when a computed meta-invoice ID is already assigned in storage. |
 | `InvalidDisputeResolution()` | Thrown when the dispute resolution type is invalid. |
 | `InvalidSellersPayoutShare()` | Thrown when the seller's payout share exceeds the allowed limit (10000 BPS). |
-| `InvalidSeller()` | Thrown when the seller address provided is invalid. |
+| `InvalidSeller()` | Thrown when an invoice is created with the zero address as the seller. |
 | `EscrowWithdrawFailed()` | Thrown when the escrow contract fails to execute a withdrawal. |
+| `InvalidOracle()` | Thrown when attempting to set the oracle address to the zero address. |

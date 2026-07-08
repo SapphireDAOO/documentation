@@ -4,7 +4,7 @@ TaskQueueLib is a small scheduling helper that keeps track of “what should hap
 
 When a new task needs to be scheduled, it is inserted with its due time. If the due time changes, the task can be rescheduled, and the heap reorders itself so the next upcoming task is still on top. Tasks can also be removed directly, which is useful if an invoice is canceled or no longer needs an automated action.
 
-To run scheduled actions, the library checks whether the next task is due “now” and, if it is, it processes tasks in order. It does this carefully with a gas/limit safeguard so it does not try to process too many tasks at once. For each task, it calls back into the payment processor’s release logic and uses simple status codes to decide whether to remove the task, skip it, or stop if something is wrong.
+To run scheduled actions, the library checks whether the next task is due “now” and, if it is, it processes tasks in order. It does this carefully with a gas/limit safeguard so it does not try to process too many tasks at once. For each task, it calls back into the payment processor’s release logic and uses a simple status code to decide what happens next: a successful release moves on to the next task, while both an ineligible or errored task are treated the same way — removed as a stale entry so the queue can keep moving.
 
 Keys are encoded into `uint256` with `dueTime` in the high 40 bits and `id` in the low 216 bits.
 
@@ -14,7 +14,7 @@ You can find the full implementation [here](https://github.com/SapphireDAOO/paym
 
 #### NOT\_ELIGIBLE\_FOR\_RELEASE
 
-Returned when a task is not yet eligible for release (e.g. wrong status or too early).
+Returned when a task is not yet eligible for release (e.g. wrong status or too early). Reserved for callback implementations — `SimplePaymentProcessor`'s current `_release` callback never returns this value, only `SUCCESSFUL` or `ERROR`.
 
 ```solidity
 uint256 constant NOT_ELIGIBLE_FOR_RELEASE = 1
@@ -98,17 +98,18 @@ function reschedule(Heap storage _heap, uint216 _id, uint40 _newDueAt, mapping(u
 
 Iterates through the heap and attempts to release due tasks based on available gas.
 
-This function uses a gas threshold to avoid running out of gas. It repeatedly attempts to release the current task using the provided `releaseCallback`. If the task is not eligible or an error occurs, it moves to the next task in the heap using the `index` mapping.
+Peeks at the heap root on each iteration. If the top task is not yet due (`block.timestamp < dueAt`), the loop exits immediately — the min-heap ordering guarantees all remaining tasks are also not yet due. Otherwise `_callback` is invoked with the task ID, and the returned status code decides control flow:
 
-* `SUCCESSFUL`: The task was released and the next is processed.
-* `NOT_ELIGIBLE_FOR_RELEASE`: Skips to the next task.
-* `ERROR`: Aborts the loop.
+* `SUCCESSFUL`: Task released and removed from heap; continues to the next task.
+* `NOT_ELIGIBLE_FOR_RELEASE`: Stale entry — removed from the heap (via `_index`) and the loop continues.
+* `ERROR`: Stale entry — also removed from the heap and the loop continues (it does **not** abort the loop).
 
 ```solidity
 function processDueTask(
     Heap storage _heap,
-    function(uint216) internal returns (uint256) _releaseCallback,
-    uint256 _gasThresold
+    mapping(uint216 => uint256) storage _index,
+    function(uint216) internal returns (uint256) _callback,
+    uint256 _gasThreshold
 ) internal;
 ```
 
@@ -117,8 +118,9 @@ function processDueTask(
 |        Name        |                       Type                      |                                 Description                                |
 | :----------------: | :---------------------------------------------: | :------------------------------------------------------------------------: |
 |       `_heap`      |                      `Heap`                     |               The heap data structure storing encoded tasks.               |
-| `_releaseCallback` | `function (uint216) internal returns (uint256)` | A function that attempts to release a task by ID, returning a status code. |
-|   `_gasThresold`   |                    `uint256`                    |         The minimum remaining gas required to continue processing.         |
+|      `_index`      |      `mapping(uint216 => uint256) storage`      |    Mapping from task ID to 1-based heap position, used to remove stale entries. |
+|     `_callback`    | `function (uint216) internal returns (uint256)` | A function that attempts to release or refund a task by ID, returning a status code. |
+|  `_gasThreshold`   |                    `uint256`                    |         The minimum remaining gas required to continue processing.         |
 
 #### due
 
@@ -204,26 +206,6 @@ function _decode(uint256 _key) private pure returns (uint216 id, uint40 dueAt);
 | :-----: | :-------: | :----------------------: |
 |   `id`  | `uint216` |       The task ID.       |
 | `dueAt` |  `uint40` | The due time in seconds. |
-
-#### \_getId
-
-Extracts and returns the task ID from a given heap key.
-
-```solidity
-function _getId(uint256 _key) private pure returns (uint216 id);
-```
-
-**Parameters**
-
-|  Name  |    Type   |                           Description                          |
-| :----: | :-------: | :------------------------------------------------------------: |
-| `_key` | `uint256` | The encoded heap key containing the task ID and due timestamp. |
-
-**Returns**
-
-| Name |    Type   |      Description     |
-| :--: | :-------: | :------------------: |
-| `id` | `uint216` | The decoded task ID. |
 
 #### \_siftDown
 

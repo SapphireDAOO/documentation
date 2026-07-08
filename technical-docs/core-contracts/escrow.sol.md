@@ -43,10 +43,10 @@ constructor(uint216 _invoiceId, address _paymentProcessorAddress) payable;
 
 Withdraws ETH or ERC20 tokens from the escrow contract to a specified receiver.
 
-Only callable by the payment processor. Transfers ETH if `token` is the zero address, otherwise transfers ERC20 tokens.
+Only callable by the payment processor. Transfers ETH if `token` is the zero address, otherwise transfers ERC20 tokens. Uses a low-level call for both ETH and ERC20 transfers and does **not** revert on failure — the return value must be checked by the caller.
 
 ```solidity
-function withdraw(address _token, address _receiver, uint256 _amount) external returns (bool success);
+function withdraw(address _token, address _receiver, uint256 _amount) external onlyPaymentProcessor returns (bool success);
 ```
 
 **Parameters**
@@ -59,18 +59,32 @@ function withdraw(address _token, address _receiver, uint256 _amount) external r
 
 ### Events
 
-#### FundsDeposited
+#### Deposited
 
 Emitted when funds are deposited into the escrow for an invoice.
 
 ```solidity
-event FundsDeposited(uint216 indexed invoiceId, uint256 indexed value);
+event Deposited(uint216 indexed invoiceId, uint256 indexed value);
 ```
 
 | Name        |   Type    | Description                                                |
 | :----------: | :-------: | :---------------------------------------------------------: |
 | `invoiceId` | `uint216` | The unique key of the invoice associated with the deposit. |
 | `value`     | `uint256` | The amount of funds deposited in wei.                      |
+
+#### Withdrawn
+
+Emitted when funds are withdrawn from the escrow to a receiver.
+
+```solidity
+event Withdrawn(address token, address receiver, uint256 amount);
+```
+
+| Name       |   Type    | Description                                                  |
+| :---------: | :-------: | :-------------------------------------------------------------: |
+| `token`    | `address` | The address of the ERC20 token withdrawn, or `address(0)` for ETH. |
+| `receiver` | `address` | The address that received the withdrawn funds.               |
+| `amount`   | `uint256` | The amount of ETH (wei) or tokens transferred.                |
 
 ### Errors
 
