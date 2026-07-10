@@ -11,7 +11,7 @@ The `AdvancedPaymentProcessor` contract supports creating, managing, and settlin
 
 Contract Address: [0x3d07827e8a6ba46f37d129df8d99f4ee8aa5685f](https://sepolia.etherscan.io/address/0x3d07827e8a6ba46f37d129df8d99f4ee8aa5685f)
 
-You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/v2/src/AdvancedPaymentProcessor.sol)
+You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/src/AdvancedPaymentProcessor.sol)
 
 ### State Variables
 
@@ -31,7 +31,7 @@ OracleManager used to convert USD-denominated invoice prices into payment-token 
 IOracleManager public oracle
 ```
 
-The invoice status codes and fee/decimal constants below are plain file-level constants imported from `constants/Advanced.sol`, not `public` members of the contract itself — there is no on-chain getter like `AdvancedPaymentProcessor.CREATED()`. Note also that `constants/Advanced.sol` additionally defines `LOCKED = 10` and `MAX_WITHDRAWAL_RETRIES = 3`, but this contract does **not** import or use either — there is no automated retry/locking path here (unlike `SimplePaymentProcessor`); releases and refunds are always triggered manually by the marketplace.
+The invoice status codes and fee/decimal constants below are plain file-level constants imported from `constants/Advanced.sol`, not `public` members of the contract itself — there is no on-chain getter like `AdvancedPaymentProcessor.CREATED()`. 
 
 #### CREATED
 

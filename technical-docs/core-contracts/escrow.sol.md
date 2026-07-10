@@ -1,6 +1,6 @@
 # Escrow.sol
 
-This contract holds the amount of value sent by the payer. It is created by the Escrow factory contract in the Invoice contract. You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/v2/src/Escrow.sol).
+This contract holds the amount of value sent by the payer. It is created by the Escrow factory contract in the Invoice contract. You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/Escrow.sol).
 
 ### State Variables
 
