@@ -1,8 +1,8 @@
 # AdvancedPaymentProcessor.sol
 
-## Advanced Payment Processor
+## Intermediated Payment Processor
 
-The `AdvancedPaymentProcessor` contract supports creating, managing, and settling payments between sellers and buyers via the marketplace, with the following features:
+The `AdvancedPaymentProcessor` contract supports creating, managing, and settling payments between sellers and buyers via the intermediated platform, with the following features:
 
 * Meta invoice and sub-invoice
 * Dispute resolution
@@ -150,7 +150,7 @@ constructor(address _paymentProcessorStorageAddress, address _oracle) ;
 
 Creates a single invoice with the specified parameters and returns its unique hash.
 
-Only callable by the marketplace contract.
+Only callable by the intermediated platform.
 
 ```solidity
 function createSingleInvoice(InvoiceCreationParam memory _param)
@@ -175,7 +175,7 @@ function createSingleInvoice(InvoiceCreationParam memory _param)
 
 Creates a meta-invoice composed of multiple sub-invoices for a buyer.
 
-Only callable by the marketplace contract. Each sub-invoice is created using the provided parameters, and all are linked under a single meta-invoice key.
+Only callable by the intermediated platform. Each sub-invoice is created using the provided parameters, and all are linked under a single meta-invoice key.
 
 ```solidity
 function createMetaInvoice(InvoiceCreationParam[] memory _param)
@@ -250,7 +250,7 @@ function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonR
 
 Creates a dispute for an invoice.
 
-Callable only by the marketplace. Only valid for invoices in the PAID state (reverts `InvalidInvoiceState` otherwise). Transitions the invoice to DISPUTED, blocking `release` until the dispute is resolved, dismissed, or settled. There is no automated release queue/heap in this contract — release only ever happens via an explicit marketplace call.
+Callable only by the intermediated platform. Only valid for invoices in the PAID state (reverts `InvalidInvoiceState` otherwise). Transitions the invoice to DISPUTED, blocking `release` until the dispute is resolved, dismissed, or settled. There is no automated release queue/heap in this contract — release only ever happens via an explicit intermediated-platform call.
 
 ```solidity
 function createDispute(uint216 _invoiceId) external onlyMarketplace;
@@ -266,7 +266,7 @@ function createDispute(uint216 _invoiceId) external onlyMarketplace;
 
 handle a dispute on a given invoice.
 
-Callable only by the marketplace. Must be called after a dispute is created. The resolution can be DISPUTE\_DISMISSED, or DISPUTE\_SETTLED. If settled, the seller and buyer receive a split of the funds based on sellerShare.
+Callable only by the intermediated platform. Must be called after a dispute is created. The resolution can be DISPUTE\_DISMISSED, or DISPUTE\_SETTLED. If settled, the seller and buyer receive a split of the funds based on sellerShare.
 
 ```solidity
 function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare) external onlyMarketplace;
@@ -284,7 +284,7 @@ function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerSha
 
 Releases escrowed funds to the seller after the release window has passed.
 
-Callable only by the marketplace. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller. The invoice transitions to RELEASED and its balance is zeroed. There is no heap — this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
+Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller. The invoice transitions to RELEASED and its balance is zeroed. There is no heap — this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
 
 ```solidity
 function release(uint216 _invoiceId) external onlyMarketplace;
@@ -298,7 +298,7 @@ function release(uint216 _invoiceId) external onlyMarketplace;
 
 #### refund
 
-Issues a partial or full refund for a paid invoice. Callable only by the marketplace; invoice must be in the PAID state. `_refundShare` must be between 1 and 10,000 basis points. A full refund (10,000 BPS) transitions the invoice to REFUNDED; a partial refund reduces the escrow balance but leaves the invoice in PAID state so it can still be released later.
+Issues a partial or full refund for a paid invoice. Callable only by the intermediated platform; invoice must be in the PAID state. `_refundShare` must be between 1 and 10,000 basis points. A full refund (10,000 BPS) transitions the invoice to REFUNDED; a partial refund reduces the escrow balance but leaves the invoice in PAID state so it can still be released later.
 
 ```solidity
 function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketplace;
@@ -315,7 +315,7 @@ function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketpla
 
 Cancels a single invoice before payment.
 
-Callable only by the marketplace. If the invoice belongs to a meta-invoice, the meta-invoice total price is reduced accordingly. Only valid for invoices in the CREATED state.
+Callable only by the intermediated platform. If the invoice belongs to a meta-invoice, the meta-invoice total price is reduced accordingly. Only valid for invoices in the CREATED state.
 
 ```solidity
 function cancelInvoice(uint216 _invoiceId) public onlyMarketplace;
@@ -331,7 +331,7 @@ function cancelInvoice(uint216 _invoiceId) public onlyMarketplace;
 
 Finalizes a dispute and marks the invoice as resolved.
 
-Callable only by the marketplace after a dispute has been raised by the buyer. This function is used when both parties (buyer and seller) have come to an agreement without requiring arbitration, or when the dispute period has expired with no further action. Transitions the invoice state from DISPUTED to DISPUTE\_RESOLVED.
+Callable only by the intermediated platform after a dispute has been raised by the buyer. This function is used when both parties (buyer and seller) have come to an agreement without requiring arbitration, or when the dispute period has expired with no further action. Transitions the invoice state from DISPUTED to DISPUTE\_RESOLVED.
 
 ```solidity
 function resolveDispute(uint216 _invoiceId) external onlyMarketplace;

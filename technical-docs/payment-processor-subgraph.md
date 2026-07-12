@@ -15,8 +15,8 @@
 This subgraph indexes **six** Sapphire DAO smart contracts deployed on the Base Sepolia testnet:
 
 - **SimplePaymentProcessor** — A native-token (ETH) escrow contract. A seller creates an invoice, the buyer pays in ETH, and the seller accepts (releasing funds after a hold period) or rejects (triggering a refund). Backed by an on-chain min-heap and Chainlink Automation for automated release/refund/retry, with a `LOCKED` fallback state if all automated withdrawal attempts fail.
-- **AdvancedPaymentProcessor** — A multi-token escrow contract with dispute resolution, partial refunds, meta-invoices (batch invoices), and USD-price-pegged payments via an `OracleManager` contract wrapping Chainlink price feeds. Releases and refunds here are always triggered manually by the marketplace — there is no automated retry/locked-fund path.
-- **PaymentProcessorStorage** — Shared configuration contract (fee rate, fee receiver, default hold period, marketplace address, gas threshold, payment validity duration) and the authorized-address allowlist used by both processors.
+- **AdvancedPaymentProcessor** — A multi-token escrow contract with dispute resolution, partial refunds, meta-invoices (batch invoices), and USD-price-pegged payments via an `OracleManager` contract wrapping Chainlink price feeds. Releases and refunds here are always triggered manually by the intermediated platform — there is no automated retry/locked-fund path.
+- **PaymentProcessorStorage** — Shared configuration contract (fee rate, fee receiver, default hold period, intermediated platform address, gas threshold, payment validity duration) and the authorized-address allowlist used by both processors.
 - **Notes** — An encrypted note store attached to invoices. Notes are stored off-chain but their on-chain references and per-user "opened" state are indexed here.
 - **MultiSig** — Multisig governance contract gating privileged admin calls into the processors and storage contract. Its signer set, threshold, proposed/approved/executed/canceled transactions, and approvals are indexed here.
 - **OracleManager** — Emits `PriceFeedSet` when a token gains a Chainlink price feed; the handler registers/refreshes the token's `PaymentToken` metadata.
@@ -178,7 +178,7 @@ One invoice on the AdvancedPaymentProcessor contract; supports multi-token payme
 | :--- | :--- | :--- |
 | `id` | `ID!` | On-chain invoice ID |
 | `invoiceNonce` | `BigInt!` | Internal invoice nonce |
-| `state` | `AdvancedPaymentProcessorState!` | See [State Machine](#42-advanced-payment-processor-states) — no `LOCKED` state exists here |
+| `state` | `AdvancedPaymentProcessorState!` | See [State Machine](#42-intermediated-payment-processor-states) — no `LOCKED` state exists here |
 | `seller` | `User!` | Invoice seller |
 | `buyer` | `User` | Set once paid |
 | `escrow` | `Bytes` | Escrow contract address |
@@ -285,7 +285,7 @@ All timestamps are Unix seconds stored as `BigInt`.
 | `RELEASED` | Hold period elapsed; funds released to seller |
 | `LOCKED` | All automated withdrawal retries exhausted; recoverable only via `releaseLocked` |
 
-#### 4.2 Advanced Payment Processor States
+#### 4.2 Intermediated Payment Processor States
 
 | State | Meaning |
 | :--- | :--- |
@@ -299,7 +299,7 @@ All timestamps are Unix seconds stored as `BigInt`.
 | `REFUNDED` | Only reached on a **full** refund (`_refundShare == 10000` bps) — partial refunds stay `PAID` |
 | `RELEASED` | Funds released to seller |
 
-There is no `LOCKED` state on this contract — releases and refunds are always triggered manually by the marketplace, with no automated retry path.
+There is no `LOCKED` state on this contract — releases and refunds are always triggered manually by the intermediated platform, with no automated retry path.
 
 ---
 

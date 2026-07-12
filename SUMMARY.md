@@ -11,7 +11,7 @@
 ## How-to guide
 
 * [Use The Simple Processor](how-to-guide/markdown.md)
-* [Use The Advanced Processor](how-to-guide/interactive-blocks.md)
+* [Use The Intermediated Processor](how-to-guide/interactive-blocks.md)
 * [Handle Disputes](how-to-guide/openapi.md)
 * [Release & Refunds](how-to-guide/release-and-refunds.md)
 * [Notes](how-to-guide/notes.md)

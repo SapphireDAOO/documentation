@@ -1,8 +1,8 @@
-# Use The Advanced Processor
+# Use The Intermediated Processor
 
 ### For Sellers
 
-The marketplace creates invoices on the seller's behalf and provides details such as the seller's address and the invoice price to the payment processor. The marketplace generates a single invoice or meta-invoice with a unique ID and a link or QR code, which you share with the Buyer.
+The intermediated platform creates invoices on the seller's behalf and provides details such as the seller's address and the invoice price to the payment processor. The intermediated platform generates a single invoice or meta-invoice with a unique ID and a link or QR code, which you share with the Buyer.
 
 You can check the invoice status on your dashboard in SapphireDao. Invoices can be:
 
@@ -41,4 +41,4 @@ After payment, the invoice follows the release flow. A release time is set autom
 
 ### Important Notes
 
-Funds are secured in escrow until released or refunded. Prices are converted from US dollars to crypto using trusted price feeds([chainlink data feeds](https://docs.chain.link/data-feeds/price-feeds/)). Only the authorized third-party platform can create invoices and manage escrow actions such as refunds, dispute handling, and releases, and it performs these actions through its designated [Platform Operator](../user-docs/publish-your-docs.md#platform-marketplace-operator-wallet). Seller payouts are made from escrow minus a small platform fee. Unpaid invoices expire after a configured validity period visible on the dashboard. Disputes, covered elsewhere, can be raised after payment and handled through the contract’s dispute flow.
+Funds are secured in escrow until released or refunded. Prices are converted from US dollars to crypto using trusted price feeds([chainlink data feeds](https://docs.chain.link/data-feeds/price-feeds/)). Only the authorized third-party platform can create invoices and manage escrow actions such as refunds, dispute handling, and releases, and it performs these actions through its designated [Platform Operator](../user-docs/publish-your-docs.md#intermediated-platform-operator-wallet). Seller payouts are made from escrow minus a small platform fee. Unpaid invoices expire after a configured validity period visible on the dashboard. Disputes, covered elsewhere, can be raised after payment and handled through the contract’s dispute flow.

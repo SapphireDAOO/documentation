@@ -170,7 +170,7 @@ function setDefaultHoldPeriod(uint96 _newDefaultHoldPeriod) public onlyOwner;
 
 #### setMarketplaceAddress
 
-Updates the marketplace address allowed to perform privileged operations.
+Updates the intermediated platform address allowed to perform privileged operations.
 
 Callable only by the contract owner.
 
@@ -182,7 +182,7 @@ function setMarketplaceAddress(address _marketplaceAddress) external onlyOwner;
 
 |          Name         |    Type   |          Description         |
 | :-------------------: | :-------: | :--------------------------: |
-| `_marketplaceAddress` | `address` | The new marketplace address. |
+| `_marketplaceAddress` | `address` | The new intermediated platform address. |
 
 #### getPaymentValidityDuration
 
@@ -256,7 +256,7 @@ function getFeeReceiver() external view returns (address feeReceiver);
 
 #### getMarketplace
 
-Returns the address of the authorized marketplace contract.
+Returns the address of the authorized intermediated platform.
 
 ```solidity
 function getMarketplace() external view returns (address marketplace);
@@ -266,7 +266,7 @@ function getMarketplace() external view returns (address marketplace);
 
 |      Name     |    Type   |        Description       |
 | :-----------: | :-------: | :----------------------: |
-| `marketplace` | `address` | The marketplace address. |
+| `marketplace` | `address` | The intermediated platform address. |
 
 #### getDefaultHoldPeriod
 
@@ -365,7 +365,7 @@ event FeeReceiverUpdated(address indexed feeReceiver);
 
 #### MarketplaceUpdated
 
-Emitted when the marketplace address is updated.
+Emitted when the intermediated platform address is updated.
 
 ```solidity
 event MarketplaceUpdated(address indexed marketplace);
@@ -373,7 +373,7 @@ event MarketplaceUpdated(address indexed marketplace);
 
 |      Name      |    Type   |          Description         |
 | :-------------: | :-------: | :------------------------------: |
-| `marketplace` | `address` | The new marketplace address. |
+| `marketplace` | `address` | The new intermediated platform address. |
 
 #### FeeRateUpdated
 

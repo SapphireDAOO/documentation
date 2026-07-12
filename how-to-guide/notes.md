@@ -8,7 +8,7 @@ For privacy, each note is locked (encrypted) before it is stored. The app genera
 
 * Create invoice: add a note when requesting payment.
 * Pay page: add a note when completing a payment.
-* Checkout (marketplace): add a note before paying with a token.
+* Checkout (intermediated platform): add a note before paying with a token.
 * Invoice details: use the Notes section to add follow‑up messages.
 
 ### Sharing options

@@ -1,6 +1,6 @@
 # Invoices
 
-An invoice contains the relevant order data and acts as the on-chain record of a specific buyer-seller order. In the Advanced Payment Processor, an invoice can also be a meta-invoice, which combines multiple sub-invoices into a single payment.
+An invoice contains the relevant order data and acts as the on-chain record of a specific buyer-seller order. In the Intermediated Payment Processor, an invoice can also be a meta-invoice, which combines multiple sub-invoices into a single payment.
 
 ### Meta-Invoice
 
