@@ -87,23 +87,6 @@ function setFeeReceiver(address _feeReceiverAddress) external onlyOwner;
 | :-------------------: | :-------: | :-----------------------------------: |
 | `_feeReceiverAddress` | `address` | The address to receive protocol fees. |
 
-#### setAuthorizedAddress
-
-Sets or revokes authorization for a specific address.
-
-Only callable by the contract owner.
-
-```solidity
-function setAuthorizedAddress(address _authorizedAddress, bool _authorized) external onlyOwner;
-```
-
-**Parameters**
-
-|         Name         |    Type   |                Description               |
-| :------------------: | :-------: | :--------------------------------------: |
-| `_authorizedAddress` | `address` | The address to authorize or deauthorize. |
-|     `_authorized`    |   `bool`  |    Whether the address is authorized.    |
-
 #### setFeeRate
 
 Updates the fee rate for seller payouts.
