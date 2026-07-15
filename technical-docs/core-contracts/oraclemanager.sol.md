@@ -1,8 +1,8 @@
 # OracleManager.sol
 
-The OracleManager contract manages Chainlink price feeds and sequencer uptime checks used by the [AdvancedPaymentProcessor.sol](advancedpaymentprocessor.sol.md) to convert USD-denominated invoice prices into the equivalent payment token amounts.
+The OracleManager contract manages Chainlink price feeds and sequencer uptime checks used by the [IntermediatedPaymentProcessor.sol](intermediatedpaymentprocessor.sol.md) to convert USD-denominated invoice prices into the equivalent payment token amounts.
 
-It is deployed as a standalone contract and referenced by the AdvancedPaymentProcessor via the `IOracleManager` interface. Write access is restricted to the owner of the linked [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md) contract.
+It is deployed as a standalone contract and referenced by the IntermediatedPaymentProcessor via the `IOracleManager` interface. Write access is restricted to the owner of the linked [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md) contract.
 
 You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/v2/src/OracleManager.sol)
 

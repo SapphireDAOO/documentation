@@ -2,7 +2,7 @@
 
 
 
-The payment processor Solidity smart contract is the main user interface contract. Most users will interact with the SapphireDao platform via the `PaymentProcessor.sol` contract. It shows invoice creation, management, payments, and escrow functionality on the blockchain.&#x20;
+The payment processor Solidity smart contract is the main user interface contract. Most users will interact with the SapphireDao platform via the `SimplePaymentProcessor.sol` contract. It shows invoice creation, management, payments, and escrow functionality on the blockchain.
 
 Contract Address: [0xd4a9e5ac9f54beccd7c12ca6bd7bd026bbf0058d](https://sepolia.etherscan.io/address/0xd4a9e5ac9f54beccd7c12ca6bd7bd026bbf0058d)
 
@@ -131,7 +131,9 @@ uint256 public decisionWindow
 
 Initializes the payment processor with its storage and notes contract references.
 
-Sets `ppStorage` and `notes`, initializes `decisionWindow` to `SELLER_DEFAULT_DECISION_WINDOW`, and calls `setMinimumInvoiceValue`. Fee rate, fee receiver, and the default escrow hold period all live in `ppStorage`, not here.
+Sets `ppStorage` and `notes`, initializes `decisionWindow` to `SELLER_DEFAULT_DECISION_WINDOW`, and assigns `minimumInvoiceValue` directly. Fee rate, fee receiver, and the default escrow hold period all live in `ppStorage`, not here.
+
+The minimum invoice value is assigned directly rather than via `setMinimumInvoiceValue`: this contract is deployed (via `MasterDeployer`) against a predicted storage address before `PaymentProcessorStorage` actually exists, so the setter's `onlyAuthorized` check — which calls into `ppStorage` — would revert at construction time.
 
 ```solidity
 constructor(address _paymentProcessorStorageAddress, uint256 _minimumInvoicePrice, address _notesAddress);
@@ -250,7 +252,7 @@ function cancelInvoice(uint216 _invoiceId) external;
 
 Releases the funds held in escrow for a specific invoice to the seller.
 
-Only callable by the seller. Invoice must be in `ACCEPTED` state (reverts `InvalidInvoiceState` otherwise) and `releaseAt` must have passed (reverts `HoldPeriodHasNotBeenExceeded` otherwise). Deducts the platform fee before transferring the net amount to the seller.
+Only callable by the seller. Invoice must be in `ACCEPTED` state (reverts `InvalidInvoiceState` otherwise) and `releaseAt` must have passed (reverts `HoldPeriodHasNotBeenExceeded` otherwise). Deducts the platform fee before transferring the net amount to the seller, using the fee rate captured on the invoice at creation (`feeRate`) — not the current global rate, so a later change to the global rate never affects an already-created invoice.
 
 ```solidity
 function release(uint216 _invoiceId) public;
@@ -298,42 +300,66 @@ function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) 
 | `_recipient` | `address` | The address to receive the recovered funds.                    |
 |  `_amount`   | `uint256` | The amount to transfer from the escrow.                        |
 
-#### checkUpkeep
+#### hasDueTasks
 
-Checks if upkeep is needed.
+Returns whether any scheduled invoice task is due for processing. Read by the CRE workflow on each cron tick to decide whether to submit a report onchain — the offchain analogue of the old `checkUpkeep`.
 
 ```solidity
-function checkUpkeep(bytes calldata) external view returns (bool upkeepNeeded, bytes memory performData);
+function hasDueTasks() external view returns (bool dueTasksExist);
 ```
-
-**Parameters**
-
-|   Name   |   Type  | Description |
-| :------: | :-----: | :---------: |
-| `<none>` | `bytes` |             |
 
 **Returns**
 
-|      Name      |   Type  |                          Description                         |
-| :------------: | :-----: | :----------------------------------------------------------: |
-| `upkeepNeeded` |  `bool` | Boolean indicating whether `performUpkeep` should be called. |
-|  `performData` | `bytes` |     Data to pass to `performUpkeep` if upkeep is needed.     |
+|       Name       |  Type  |                        Description                       |
+| :----------------: | :----: | :-----------------------------------------------------------: |
+| `dueTasksExist` | `bool` | True when the earliest scheduled task is due. |
 
-#### performUpkeep
+#### onReport
 
-Performs the actual upkeep work, such as executing a function or releasing funds.
+Handles a verified report delivered by the Chainlink CRE (Keystone) forwarder and processes due invoice tasks. This is the CRE replacement for the old Chainlink Automation `performUpkeep` entry point. The report payload itself is ignored — delivery of a verified report is itself the trigger.
 
-Only callable by the owner or the configured forwarder address; reverts with `NotAuthorized` otherwise.
+Only callable by the configured `forwarder` (reverts with `NotAuthorized` otherwise). Also validates that the report metadata carries the configured `workflowOwner`, reverting with `UnauthorizedWorkflowOwner` if it doesn't — so a workflow deployed by a different owner can't trigger processing through a shared forwarder. Guarded by `nonReentrant`.
 
 ```solidity
-function performUpkeep(bytes calldata) external;
+function onReport(bytes calldata _metadata, bytes calldata _report) external nonReentrant;
 ```
 
 **Parameters**
 
-|   Name   |   Type  | Description |
-| :------: | :-----: | :---------: |
-| `<none>` | `bytes` |             |
+|    Name     |   Type  |                                                        Description                                                       |
+| :-----------: | :-----: | :--------------------------------------------------------------------------------------------------------------------------: |
+| `_metadata` | `bytes` | Workflow identity data: `workflowId` (32 bytes), `workflowName` (10 bytes), `workflowOwner` (20 bytes), `reportId` (2 bytes), tightly packed. |
+|   `_report`  | `bytes` | The ABI-encoded report payload produced by the workflow. Unused by this handler. |
+
+#### processDueTasks
+
+Processes due invoice tasks (auto-release and auto-refund) within the gas threshold. Owner-only manual fallback for the CRE workflow path (`onReport`), useful if the CRE workflow or forwarder is unavailable.
+
+Only callable by the owner; reverts with `NotAuthorized` otherwise. Guarded by `nonReentrant`.
+
+```solidity
+function processDueTasks() external nonReentrant;
+```
+
+#### supportsInterface
+
+ERC-165 introspection, so the CRE forwarder can confirm this contract implements `IReceiver` before delivering a report.
+
+```solidity
+function supportsInterface(bytes4 _interfaceId) external pure returns (bool supported);
+```
+
+**Parameters**
+
+|      Name      |   Type   |            Description           |
+| :---------------: | :------: | :----------------------------------: |
+| `_interfaceId` | `bytes4` | The interface ID to check. |
+
+**Returns**
+
+|    Name    |  Type  |                                     Description                                    |
+| :-----------: | :----: | :---------------------------------------------------------------------------------: |
+| `supported` | `bool` | True for `IReceiver` and `IERC165` interface IDs; false otherwise. |
 
 #### setInvoiceReleaseTime
 
@@ -354,9 +380,9 @@ function setInvoiceReleaseTime(uint216 _invoiceId, uint40 _holdPeriod) external;
 
 #### calculateFee
 
-Calculates the fee based on the provided amount and current fee rate.
+Calculates the fee based on the provided amount and the *current* global fee rate.
 
-Fee rate is expressed in basis points (1% = 100).
+Fee rate is expressed in basis points (1% = 100). This quotes the rate that would be captured by an invoice created right now — it does **not** reflect what a given existing invoice will actually be charged on release, since `release`/`refundBuyer`/the automated release path all use the fee rate snapshotted on the invoice at creation (`feeRate`), not the current global rate.
 
 ```solidity
 function calculateFee(uint256 _amount) public view returns (uint256 feeValue);
@@ -392,9 +418,9 @@ function setMinimumInvoiceValue(uint256 _newMinimumInvoiceValue) public onlyAuth
 
 #### setForwarderAddress
 
-Updates the address of the forwarder contract used for relayed or automated calls.
+Updates the address of the CRE (Keystone) forwarder contract that delivers workflow reports via `onReport`.
 
-Only callable by the owner or the storage contract.
+Only callable by the owner or the storage contract. Only the configured forwarder may call `onReport`.
 
 ```solidity
 function setForwarderAddress(address _forwarderAddress) external onlyAuthorized;
@@ -405,6 +431,22 @@ function setForwarderAddress(address _forwarderAddress) external onlyAuthorized;
 |         Name        |    Type   |                  Description                  |
 | :-----------------: | :-------: | :-------------------------------------------: |
 | `_forwarderAddress` | `address` | The new forwarder contract address to be set. |
+
+#### setWorkflowOwner
+
+Updates the CRE workflow owner authorized to trigger `onReport`. Reports whose metadata carries a different workflow owner are rejected, so workflows deployed by other owners can't trigger task processing through the shared forwarder.
+
+Only callable by the owner or the storage contract.
+
+```solidity
+function setWorkflowOwner(address _workflowOwner) external onlyAuthorized;
+```
+
+**Parameters**
+
+|       Name       |    Type   |                     Description                    |
+| :---------------: | :-------: | :----------------------------------------------------: |
+| `_workflowOwner` | `address` | The address that owns the authorized CRE workflow. |
 
 #### setDecisionWindow
 
@@ -424,7 +466,7 @@ function setDecisionWindow(uint256 _newDecisionWindow) external onlyAuthorized;
 
 #### getForwarder
 
-Returns the address of the configured forwarder contract.
+Returns the address of the configured CRE forwarder contract.
 
 ```solidity
 function getForwarder() external view returns (address forwarderAddress);
@@ -435,6 +477,20 @@ function getForwarder() external view returns (address forwarderAddress);
 |        Name        |    Type   |            Description            |
 | :----------------: | :-------: | :-------------------------------: |
 | `forwarderAddress` | `address` | The configured forwarder address. |
+
+#### getWorkflowOwner
+
+Returns the CRE workflow owner authorized to trigger `onReport`.
+
+```solidity
+function getWorkflowOwner() external view returns (address workflowOwnerAddress);
+```
+
+**Returns**
+
+|          Name          |    Type   |              Description              |
+| :------------------------: | :-------: | :----------------------------------------: |
+| `workflowOwnerAddress` | `address` | The authorized workflow owner address. |
 
 #### getNextInvoiceNonce
 
@@ -516,6 +572,7 @@ struct Invoice {
     uint40 expiresAt;
     uint8 state;
     uint8 withdrawalRetries;
+    uint16 feeRate;
     address seller;
     address buyer;
     address escrow;
@@ -534,6 +591,7 @@ struct Invoice {
 |      `expiresAt`     |  `uint40` | The timestamp after which the seller can no longer take action (accept/reject), and the buyer is refunded. |
 |        `state`       |  `uint8`  |                                          The current state of the invoice.                                                    |
 | `withdrawalRetries`  |  `uint8`  |     Number of failed `IEscrow.withdraw` attempts by the automation path. Packed with `state` in the same storage slot.        |
+|       `feeRate`      | `uint16`  | The platform fee rate (in basis points) captured at invoice creation. Releases always charge this rate, so later changes to the global fee rate do not affect existing invoices. |
 |       `seller`       | `address` |                                     The address of the seller of the invoice.                                                 |
 |        `buyer`       | `address` |                                     The address of the buyer of the invoice.                                                  |
 |       `escrow`       | `address` |                    The address of the escrow contract managing the funds for this invoice.                                    |
@@ -707,3 +765,4 @@ event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint2
 | `InvoiceNotEligibleForRefund()` | Thrown when a refund to the buyer cannot be issued (invoice not `PAID` or decision window not yet elapsed). |
 | `HoldPeriodHasNotBeenExceeded()` | Thrown when the hold period for an invoice has not yet been exceeded. |
 | `EscrowWithdrawFailed()` | Thrown when the escrow withdrawal fails during a manual release, reject, or refund. |
+| `UnauthorizedWorkflowOwner(address _workflowOwner)` | Thrown when a CRE report's metadata does not carry the authorized workflow owner. |

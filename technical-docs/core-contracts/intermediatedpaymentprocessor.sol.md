@@ -1,17 +1,15 @@
-# AdvancedPaymentProcessor.sol
+# IntermediatedPaymentProcessor.sol
 
 ## Intermediated Payment Processor
 
-The `AdvancedPaymentProcessor` contract supports creating, managing, and settling payments between sellers and buyers via the intermediated platform, with the following features:
+The `IntermediatedPaymentProcessor` contract supports creating, managing, and settling payments between sellers and buyers via the intermediated platform, with the following features:
 
 * Meta invoice and sub-invoice
 * Dispute resolution
 * Invoice Cancellation
 * Refunds
 
-Contract Address: [0x3d07827e8a6ba46f37d129df8d99f4ee8aa5685f](https://sepolia.etherscan.io/address/0x3d07827e8a6ba46f37d129df8d99f4ee8aa5685f)
-
-You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/src/AdvancedPaymentProcessor.sol)
+You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/IntermediatedPaymentProcessor.sol)
 
 ### State Variables
 
@@ -31,7 +29,7 @@ OracleManager used to convert USD-denominated invoice prices into payment-token 
 IOracleManager public oracle
 ```
 
-The invoice status codes and fee/decimal constants below are plain file-level constants imported from `constants/Advanced.sol`, not `public` members of the contract itself — there is no on-chain getter like `AdvancedPaymentProcessor.CREATED()`. 
+The invoice status codes and fee/decimal constants below are plain file-level constants imported from `constants/Intermediated.sol`, not `public` members of the contract itself — there is no on-chain getter like `IntermediatedPaymentProcessor.CREATED()`.
 
 #### CREATED
 
@@ -133,7 +131,7 @@ uint256 constant DEFAULT_MINIMUM_INVOICE_PRICE = 1e8;
 
 #### constructor
 
-Initializes the AdvancedPaymentProcessor contract with core configuration.
+Initializes the IntermediatedPaymentProcessor contract with core configuration.
 
 ```solidity
 constructor(address _paymentProcessorStorageAddress, address _oracle) ;
@@ -266,7 +264,7 @@ function createDispute(uint216 _invoiceId) external onlyMarketplace;
 
 handle a dispute on a given invoice.
 
-Callable only by the intermediated platform. Must be called after a dispute is created. The resolution can be DISPUTE\_DISMISSED, or DISPUTE\_SETTLED. If settled, the seller and buyer receive a split of the funds based on sellerShare.
+Callable only by the intermediated platform. Must be called after a dispute is created. The resolution can be DISPUTE\_DISMISSED, or DISPUTE\_SETTLED. If settled, the seller and buyer receive a split of the funds based on sellerShare, with the seller's share subject to the platform fee rate captured on the invoice at creation (`feeRate`).
 
 ```solidity
 function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare) external onlyMarketplace;
@@ -284,7 +282,7 @@ function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerSha
 
 Releases escrowed funds to the seller after the release window has passed.
 
-Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller. The invoice transitions to RELEASED and its balance is zeroed. There is no heap — this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
+Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller, using the fee rate captured on the invoice at creation (`feeRate`) — not the current global fee rate, so a later change to the global rate never affects an already-created invoice. The invoice transitions to RELEASED and its balance is zeroed. There is no heap — this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
 
 ```solidity
 function release(uint216 _invoiceId) external onlyMarketplace;
@@ -557,6 +555,7 @@ struct Invoice {
     uint8 state;
     uint8 withdrawalRetries;
     uint32 escrowHoldPeriod;
+    uint16 feeRate;
     uint216 metaInvoiceId;
     address buyer;
     address seller;
@@ -578,6 +577,7 @@ struct Invoice {
 |         `state`        |  `uint8`  |                                                 Current state of the invoice.                                            |
 |  `withdrawalRetries`   |  `uint8`  | Reserved retry counter retained for storage-layout compatibility; unused now that releases are manual. Packed with `state`. |
 |   `escrowHoldPeriod`   | `uint32`  | Custom hold duration (in seconds) between payment and release, set at invoice creation. When non-zero, overrides the storage default. |
+|       `feeRate`        | `uint16`  | The platform fee rate (in basis points) captured at invoice creation. Releases and dispute settlements always charge this rate, so later changes to the global fee rate do not affect existing invoices. |
 |     `metaInvoiceId`    | `uint216` |              Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.                        |
 |         `buyer`        | `address` |                                              Address of the buyer.                                                       |
 |        `seller`        | `address` |                                              Address of the seller.                                                      |
@@ -774,7 +774,7 @@ event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
 
 #### LockedPaymentRecovered
 
-Declared in `IAdvancedPaymentProcessor` but **never emitted** by this contract — there is no `releaseLocked`-equivalent function here (unlike `SimplePaymentProcessor`), so this event is currently unreachable dead ABI surface.
+Declared in `IIntermediatedPaymentProcessor` but **never emitted** by this contract — there is no `releaseLocked`-equivalent function here (unlike `SimplePaymentProcessor`), so this event is currently unreachable dead ABI surface.
 
 ```solidity
 event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);

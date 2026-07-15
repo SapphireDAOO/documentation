@@ -1,6 +1,6 @@
 # Notes.sol
 
-The `Notes.sol` Solidity contract stores encrypted order notes and tracks per-user opened state for SapphireDao payment flows. It is designed to be called by authorized payment processors (for example, `SimplePaymentProcessor.sol` and `AdvancedPaymentProcessor.sol`) and uses the `PaymentProcessorStorage.sol` owner to manage authorization.
+The `Notes.sol` Solidity contract stores encrypted order notes and tracks per-user opened state for SapphireDao payment flows. It is designed to be called by authorized payment processors (for example, `SimplePaymentProcessor.sol` and `IntermediatedPaymentProcessor.sol`) and uses the `PaymentProcessorStorage.sol` owner to manage authorization.
 
 Notes.sol enables:
 

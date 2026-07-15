@@ -1,6 +1,6 @@
 # MultiSig.sol
 
-The MultiSig contract is a multisignature governance contract for privileged payment processor administration. It replaces a single-owner key with collective authorization across a defined signer set. Administrative calls (fee updates, decision windows, locked fund recovery, oracle updates, etc.) to [SimplePaymentProcessor.sol](simplepaymentprocessor.sol.md), [AdvancedPaymentProcessor.sol](advancedpaymentprocessor.sol.md), and [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md) must pass through this contract via propose → approve → execute.
+The MultiSig contract is a multisignature governance contract for privileged payment processor administration. It replaces a single-owner key with collective authorization across a defined signer set. Administrative calls (fee updates, decision windows, locked fund recovery, oracle updates, etc.) to [SimplePaymentProcessor.sol](simplepaymentprocessor.sol.md), [IntermediatedPaymentProcessor.sol](intermediatedpaymentprocessor.sol.md), and [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md) must pass through this contract via propose → approve → execute.
 
 Signer management and threshold updates are self-referential: `addSigner`, `removeSigner`, `updateThreshold`, and `cancelTransaction` are only callable by the MultiSig contract itself, so they can only be triggered as the executed result of a transaction proposed and approved against the MultiSig contract, going through the same flow as any other admin call.
 
@@ -64,7 +64,7 @@ function proposeTransaction(address _target, uint256 _value, bytes calldata _dat
 
 |   Name    |   Type    |                            Description                            |
 | :-------: | :-------: | :-----------------------------------------------------------------: |
-| `_target` | `address` | Payment processor address (SimplePaymentProcessor or AdvancedPaymentProcessor). |
+| `_target` | `address` | Payment processor address (SimplePaymentProcessor or IntermediatedPaymentProcessor). |
 | `_value`  | `uint256` |               ETH to forward; must be 0 for admin calls.             |
 | `_data`   |  `bytes`  |             ABI-encoded payment processor admin function call.      |
 

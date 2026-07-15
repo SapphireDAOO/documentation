@@ -1,6 +1,6 @@
 # PaymentProcessorStorage.sol
 
-The PaymentProcessorStorage Solidity smart contract serves as the core state and configuration layer for the SapphireDao platform. It manages invoice ID sequencing, fee parameters, hold periods, and access permissions. Other contracts, such as [SimplePaymentProcessor.sol](./) and [AdvancedPaymentProcessor.sol,](advancedpaymentprocessor.sol.md) rely on it for global settings and controlled state updates.&#x20;
+The PaymentProcessorStorage Solidity smart contract serves as the core state and configuration layer for the SapphireDao platform. It manages invoice ID sequencing, fee parameters, hold periods, and access permissions. Other contracts, such as [SimplePaymentProcessor.sol](simplepaymentprocessor.sol.md) and [IntermediatedPaymentProcessor.sol](intermediatedpaymentprocessor.sol.md), rely on it for global settings and controlled state updates.
 
 Contract Address: [0xeb57f1f77f873d8481510c1f5ee44de340dc93fe](https://sepolia.etherscan.io/address/0xeb57F1F77F873d8481510c1f5Ee44dE340Dc93fe)
 
@@ -37,7 +37,7 @@ uint256 public constant BASIS_POINTS = 10_000
 
 Initializes the contract with the given configuration.
 
-Sets the contract owner, stores the initial configuration parameters, and initializes the invoice nonce counter.
+Sets the contract owner, stores the initial configuration parameters, and initializes the invoice nonce counter. Also fetches the addresses to authorize from its deployer: `msg.sender` must implement [`IAuthorizedAddressProvider`](masterdeployer.sol.md#related-interface-iauthorizedaddressprovider) (in practice, [MasterDeployer.sol](masterdeployer.sol.md)), and this contract calls `authorizedAddresses()` on it once, at construction, emitting `AuthorizationUpdated` for each address returned. Keeping this list out of the constructor arguments keeps it out of the CREATE2 init code, so this contract's address is predictable before the authorized processors are deployed. Authorization is fixed here, at deployment, and cannot be changed afterwards — there is no setter.
 
 ```solidity
 constructor(Configuration memory _configuration) ;
@@ -122,9 +122,9 @@ function setFeeRate(uint96 _newFeeRate) external onlyOwner;
 
 #### setGasThreshold
 
-Updates the gas threshold used in automated upkeep logic.
+Updates the gas threshold used in automated task processing.
 
-Only callable by the contract owner. This threshold determines the minimum gas required to continue processing during `performUpkeep`.
+Only callable by the contract owner. This threshold determines the minimum gas required to continue processing during `SimplePaymentProcessor`'s `onReport` (Chainlink CRE) / `processDueTasks`.
 
 ```solidity
 function setGasThreshold(uint96 _newGasThreshold) external onlyOwner;
@@ -284,9 +284,9 @@ function getDefaultHoldPeriod() external view returns (uint256 defaultHoldPeriod
 
 #### getGasThreshold
 
-Returns the current gas threshold used to limit the execution loop in automated upkeep.
+Returns the current gas threshold used to limit the execution loop in automated task processing.
 
-This threshold is typically used to prevent out-of-gas errors during batch operations in Chainlink Automation.
+This threshold is typically used to prevent out-of-gas errors during batch operations triggered by the Chainlink CRE workflow.
 
 ```solidity
 function getGasThreshold() external view returns (uint256 gasThreshold);
@@ -389,7 +389,7 @@ event FeeRateUpdated(uint96 feeRate);
 
 #### GasThresholdUpdated
 
-Emitted when the automated-upkeep gas threshold is updated.
+Emitted when the automated task-processing gas threshold is updated.
 
 ```solidity
 event GasThresholdUpdated(uint96 gasThreshold);

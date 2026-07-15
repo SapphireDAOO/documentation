@@ -37,7 +37,7 @@ If a refund is needed before release, it is processed from escrow through the pl
 
 A authorized third-party commerce platform creates a single invoice or a meta-invoice, assigns a unique ID, and shares a payment link with the buyer. The buyer pays through the platform using the native token (ETH) or another supported token. Once the transaction is confirmed, the funds are held in escrow and the invoice state updates to **Paid**.
 
-After payment, the invoice follows the release flow. A release time is set automatically, and the SapphireDAO can adjust the release time before funds are released. If a refund is required while the invoice is still in the Paid state, it is processed from escrow back to the buyer through the authorized operator. When the release time is reached, the contract automatically processes the release (via [Chainlink Automation](https://docs.chain.link/chainlink-automation)) and pays the seller from escrow minus the platform fee, updating the invoice status to **Released**.
+After payment, the invoice follows the release flow. A release time is set automatically, and the SapphireDAO can adjust the release time before funds are released. If a refund is required while the invoice is still in the Paid state, it is processed from escrow back to the buyer through the authorized operator. Once the release time is reached, the authorized third-party platform triggers the release, which pays the seller from escrow minus the platform fee and updates the invoice status to **Released** — unlike the Simple Processor, this release is always manually triggered by the platform, not automated.
 
 ### Important Notes
 
