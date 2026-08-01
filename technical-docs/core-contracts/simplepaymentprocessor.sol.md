@@ -6,7 +6,9 @@ The payment processor Solidity smart contract is the main user interface contrac
 
 Contract Address: [0xd4a9e5ac9f54beccd7c12ca6bd7bd026bbf0058d](https://sepolia.etherscan.io/address/0xd4a9e5ac9f54beccd7c12ca6bd7bd026bbf0058d)
 
-You can find the full implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/v2/src/SimplePaymentProcessor.sol)&#x20;
+You can find the full implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/SimplePaymentProcessor.sol)
+
+Scheduled invoices are kept in an internal min-heap and processed by `processDueTasks`, which the registered [PaymentAutomation.sol](paymentautomation.sol.md) adapter calls on behalf of a keeper network (Chainlink CRE or Gelato). This contract holds no keeper configuration of its own — no forwarder address, no workflow owner, no CRE report handling; all of that now lives in the `PaymentAutomation` adapter.
 
 `PaymentProcessor.sol` grants users access to
 
@@ -302,7 +304,7 @@ function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) 
 
 #### hasDueTasks
 
-Returns whether any scheduled invoice task is due for processing. Read by the CRE workflow on each cron tick to decide whether to submit a report onchain — the offchain analogue of the old `checkUpkeep`.
+Returns whether any scheduled invoice task is due for processing. Read by the registered [PaymentAutomation.sol](paymentautomation.sol.md) adapter to decide whether a keeper should trigger processing.
 
 ```solidity
 function hasDueTasks() external view returns (bool dueTasksExist);
@@ -314,52 +316,15 @@ function hasDueTasks() external view returns (bool dueTasksExist);
 | :----------------: | :----: | :-----------------------------------------------------------: |
 | `dueTasksExist` | `bool` | True when the earliest scheduled task is due. |
 
-#### onReport
-
-Handles a verified report delivered by the Chainlink CRE (Keystone) forwarder and processes due invoice tasks. This is the CRE replacement for the old Chainlink Automation `performUpkeep` entry point. The report payload itself is ignored — delivery of a verified report is itself the trigger.
-
-Only callable by the configured `forwarder` (reverts with `NotAuthorized` otherwise). Also validates that the report metadata carries the configured `workflowOwner`, reverting with `UnauthorizedWorkflowOwner` if it doesn't — so a workflow deployed by a different owner can't trigger processing through a shared forwarder. Guarded by `nonReentrant`.
-
-```solidity
-function onReport(bytes calldata _metadata, bytes calldata _report) external nonReentrant;
-```
-
-**Parameters**
-
-|    Name     |   Type  |                                                        Description                                                       |
-| :-----------: | :-----: | :--------------------------------------------------------------------------------------------------------------------------: |
-| `_metadata` | `bytes` | Workflow identity data: `workflowId` (32 bytes), `workflowName` (10 bytes), `workflowOwner` (20 bytes), `reportId` (2 bytes), tightly packed. |
-|   `_report`  | `bytes` | The ABI-encoded report payload produced by the workflow. Unused by this handler. |
-
 #### processDueTasks
 
-Processes due invoice tasks (auto-release and auto-refund) within the gas threshold. Owner-only manual fallback for the CRE workflow path (`onReport`), useful if the CRE workflow or forwarder is unavailable.
+Processes due invoice tasks (auto-release and auto-refund) within the gas threshold. Callable by the owner as a manual fallback, or by the registered automation adapter. Processing stops once remaining gas drops below the configured gas threshold, so leftover tasks are picked up on the next call.
 
-Only callable by the owner; reverts with `NotAuthorized` otherwise. Guarded by `nonReentrant`.
+Only callable by the owner or by `automation` (reverts with `NotAuthorized` otherwise). Guarded by `nonReentrant`. The CRE/Gelato-specific entrypoints and forwarder/workflow-owner configuration that used to live here have moved to [PaymentAutomation.sol](paymentautomation.sol.md) — this contract now only exposes the bare `hasDueTasks`/`processDueTasks` pair and trusts nothing but the `automation` address.
 
 ```solidity
 function processDueTasks() external nonReentrant;
 ```
-
-#### supportsInterface
-
-ERC-165 introspection, so the CRE forwarder can confirm this contract implements `IReceiver` before delivering a report.
-
-```solidity
-function supportsInterface(bytes4 _interfaceId) external pure returns (bool supported);
-```
-
-**Parameters**
-
-|      Name      |   Type   |            Description           |
-| :---------------: | :------: | :----------------------------------: |
-| `_interfaceId` | `bytes4` | The interface ID to check. |
-
-**Returns**
-
-|    Name    |  Type  |                                     Description                                    |
-| :-----------: | :----: | :---------------------------------------------------------------------------------: |
-| `supported` | `bool` | True for `IReceiver` and `IERC165` interface IDs; false otherwise. |
 
 #### setInvoiceReleaseTime
 
@@ -416,37 +381,21 @@ function setMinimumInvoiceValue(uint256 _newMinimumInvoiceValue) public onlyAuth
 | :---------------------------: | :-------: | :-------------------------------------: |
 | `_newMinimumInvoiceValue`     | `uint256` | The new minimum invoice value to set (in wei). |
 
-#### setForwarderAddress
+#### setAutomation
 
-Updates the address of the CRE (Keystone) forwarder contract that delivers workflow reports via `onReport`.
+Updates the automation adapter allowed to drain due tasks on a keeper network's behalf.
 
-Only callable by the owner or the storage contract. Only the configured forwarder may call `onReport`.
+Only callable by the owner or the storage contract. The adapter (see [PaymentAutomation.sol](paymentautomation.sol.md)) holds the Chainlink CRE and Gelato entrypoints; this processor trusts nothing but its address. Setting it to the zero address leaves the owner as the only caller of `processDueTasks`.
 
 ```solidity
-function setForwarderAddress(address _forwarderAddress) external onlyAuthorized;
+function setAutomation(address _automationAddress) external onlyAuthorized;
 ```
 
 **Parameters**
 
-|         Name        |    Type   |                  Description                  |
-| :-----------------: | :-------: | :-------------------------------------------: |
-| `_forwarderAddress` | `address` | The new forwarder contract address to be set. |
-
-#### setWorkflowOwner
-
-Updates the CRE workflow owner authorized to trigger `onReport`. Reports whose metadata carries a different workflow owner are rejected, so workflows deployed by other owners can't trigger task processing through the shared forwarder.
-
-Only callable by the owner or the storage contract.
-
-```solidity
-function setWorkflowOwner(address _workflowOwner) external onlyAuthorized;
-```
-
-**Parameters**
-
-|       Name       |    Type   |                     Description                    |
-| :---------------: | :-------: | :----------------------------------------------------: |
-| `_workflowOwner` | `address` | The address that owns the authorized CRE workflow. |
+|        Name        |    Type   |                    Description                   |
+| :-------------------: | :-------: | :----------------------------------------------------: |
+| `_automationAddress` | `address` | The new automation adapter address to set. |
 
 #### setDecisionWindow
 
@@ -464,33 +413,19 @@ function setDecisionWindow(uint256 _newDecisionWindow) external onlyAuthorized;
 | :------------------: | :-------: | :---------------------------------: |
 | `_newDecisionWindow` | `uint256` | The new decision window in seconds. |
 
-#### getForwarder
+#### getAutomation
 
-Returns the address of the configured CRE forwarder contract.
+Returns the address of the registered automation adapter.
 
 ```solidity
-function getForwarder() external view returns (address forwarderAddress);
+function getAutomation() external view returns (address automationAddress);
 ```
 
 **Returns**
 
-|        Name        |    Type   |            Description            |
-| :----------------: | :-------: | :-------------------------------: |
-| `forwarderAddress` | `address` | The configured forwarder address. |
-
-#### getWorkflowOwner
-
-Returns the CRE workflow owner authorized to trigger `onReport`.
-
-```solidity
-function getWorkflowOwner() external view returns (address workflowOwnerAddress);
-```
-
-**Returns**
-
-|          Name          |    Type   |              Description              |
-| :------------------------: | :-------: | :----------------------------------------: |
-| `workflowOwnerAddress` | `address` | The authorized workflow owner address. |
+|        Name        |    Type   |               Description               |
+| :-------------------: | :-------: | :-----------------------------------------: |
+| `automationAddress` | `address` | The configured automation adapter address. |
 
 #### getNextInvoiceNonce
 
@@ -720,6 +655,18 @@ event WithdrawalRetried(uint216 indexed invoiceId, address indexed recipient, ui
 | `amount`    | `uint256` | The amount that failed to transfer.                 |
 | `attempt`   | `uint8`   | The retry attempt number.                           |
 
+#### AutomationUpdated
+
+Emitted when the automation adapter authorized to call `processDueTasks` is updated.
+
+```solidity
+event AutomationUpdated(address indexed automation);
+```
+
+| Name          | Type      | Description                             |
+| :-------------: | :-------: | :---------------------------------------: |
+| `automation` | `address` | The new automation adapter address. |
+
 #### LockedPaymentRecovered
 
 Emitted when a locked invoice's funds are manually recovered by an authorized address.
@@ -765,4 +712,3 @@ event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint2
 | `InvoiceNotEligibleForRefund()` | Thrown when a refund to the buyer cannot be issued (invoice not `PAID` or decision window not yet elapsed). |
 | `HoldPeriodHasNotBeenExceeded()` | Thrown when the hold period for an invoice has not yet been exceeded. |
 | `EscrowWithdrawFailed()` | Thrown when the escrow withdrawal fails during a manual release, reject, or refund. |
-| `UnauthorizedWorkflowOwner(address _workflowOwner)` | Thrown when a CRE report's metadata does not carry the authorized workflow owner. |

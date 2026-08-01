@@ -21,6 +21,7 @@
 * [Core Contracts](technical-docs/core-contracts/README.md)
   * [PaymentProcessorStorage.sol](technical-docs/core-contracts/paymentprocessorstorage.sol.md)
   * [SimplePaymentProcessor.sol](technical-docs/core-contracts/simplepaymentprocessor.sol.md)
+  * [PaymentAutomation.sol](technical-docs/core-contracts/paymentautomation.sol.md)
   * [IntermediatedPaymentProcessor.sol](technical-docs/core-contracts/intermediatedpaymentprocessor.sol.md)
   * [Escrow.sol](technical-docs/core-contracts/escrow.sol.md)
   * [EscrowFactory.sol](technical-docs/core-contracts/escrowfactory.sol.md)

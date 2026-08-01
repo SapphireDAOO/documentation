@@ -107,7 +107,7 @@ function setFeeRate(uint96 _newFeeRate) external onlyOwner;
 
 Updates the gas threshold used in automated task processing.
 
-Only callable by the contract owner. This threshold determines the minimum gas required to continue processing during `SimplePaymentProcessor`'s `onReport` (Chainlink CRE) / `processDueTasks`.
+Only callable by the contract owner. This threshold determines the minimum gas required to continue processing during `SimplePaymentProcessor.processDueTasks` — called either directly or via the `PaymentAutomation` adapter's `onReport` (Chainlink CRE) / `processDueTasks` (Gelato) entrypoints.
 
 ```solidity
 function setGasThreshold(uint96 _newGasThreshold) external onlyOwner;
