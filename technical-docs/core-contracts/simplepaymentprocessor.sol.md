@@ -10,6 +10,8 @@ You can find the full implementation [here](https://github.com/SapphireDAOO/paym
 
 Scheduled invoices are kept in an internal min-heap and processed by `processDueTasks`, which the registered [PaymentAutomation.sol](paymentautomation.sol.md) adapter calls on behalf of a keeper network (Chainlink CRE or Gelato). This contract holds no keeper configuration of its own — no forwarder address, no workflow owner, no CRE report handling; all of that now lives in the `PaymentAutomation` adapter.
 
+Every value-moving entrypoint (everything except `cancelInvoice`, which moves no funds) reverts with `ContractPaused` while [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md#pause) reports the system paused.
+
 `PaymentProcessor.sol` grants users access to
 
 * Create invoice
@@ -79,12 +81,12 @@ Status code representing that a payment has been successfully released to the se
 uint8 constant RELEASED = 7;
 ```
 
-#### LOCKED
+#### BURNED
 
-Invoice is permanently locked after all automated withdrawal retries failed.
+Invoice's escrowed funds were burned to `address(0)` after all automated withdrawal retries failed.
 
 ```solidity
-uint8 constant LOCKED = 8;
+uint8 constant BURNED = 8;
 ```
 
 #### BASIS\_POINTS
@@ -105,7 +107,7 @@ uint256 constant SELLER_DEFAULT_DECISION_WINDOW = 6 hours;
 
 #### MAX\_WITHDRAWAL\_RETRIES
 
-Maximum number of automated withdrawal retry attempts before falling back (see [refundBuyer](#refundbuyer) and the automated-upkeep retry logic).
+Maximum number of automated withdrawal retry attempts before the escrowed funds are burned (see [refundBuyer](#refundbuyer)).
 
 ```solidity
 uint8 constant MAX_WITHDRAWAL_RETRIES = 3;
@@ -119,13 +121,7 @@ Reference to the external Payment Processor storage contract.
 IPaymentProcessorStorage public immutable ppStorage
 ```
 
-#### decisionWindow
-
-The window of time allowed for accepting a transaction after creation.
-
-```solidity
-uint256 public decisionWindow
-```
+`decisionWindow` is a private state variable (previously `public`) — read it via [getDecisionWindow](#getdecisionwindow) instead of a direct getter.
 
 ### Functions
 
@@ -151,13 +147,14 @@ constructor(address _paymentProcessorStorageAddress, uint256 _minimumInvoicePric
 
 #### createInvoice
 
-Creates a new invoice with a specified price.
+Creates a new invoice with a specified price and escrow hold period.
 
-Optionally stores a reference to the user's off-chain notes file.
+Optionally stores a reference to the user's off-chain notes file. The hold period is fixed here and cannot be changed afterwards, including by the owner — there is no equivalent to the old `setInvoiceReleaseTime` override anymore. Pass `0` to make funds releasable immediately on acceptance.
 
 ```solidity
-function createInvoice(uint256 _price, bytes memory _storageRef, bool _share)
+function createInvoice(uint256 _price, uint32 _holdPeriod, bytes memory _storageRef, bool _share)
     public
+    whenNotPaused
     returns (uint216 invoiceId);
 ```
 
@@ -166,6 +163,7 @@ function createInvoice(uint256 _price, bytes memory _storageRef, bool _share)
 |      Name     |    Type   |                       Description                      |
 | :-----------: | :-------: | :----------------------------------------------------: |
 | `_price`      | `uint256` |            The price of the invoice in wei.            |
+| `_holdPeriod` | `uint32`  | How long (in seconds) funds stay in escrow after the seller accepts payment. `0` releases immediately on acceptance. |
 |  `_storageRef`  |  `bytes`  | A bytes-encoded reference to the user's notes storage. |
 |     `_share`    |   `bool`  |      Whether the note is shared with non-authors.      |
 
@@ -185,6 +183,7 @@ The caller must send enough ETH to cover the invoice price.
 function pay(uint216 _invoiceId, bytes memory _storageRef, bool _share)
     public
     payable
+    whenNotPaused
     returns (address escrowAddress);
 ```
 
@@ -206,10 +205,10 @@ function pay(uint216 _invoiceId, bytes memory _storageRef, bool _share)
 
 Marks the specified invoice as accepted.
 
-This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event. Only callable by the invoice's seller, and only while the invoice is `PAID` and within the acceptance window (`expiresAt`); reverts with `AcceptanceWindowExceeded` once that window has passed.
+This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event. Only callable by the invoice's seller, and only while the invoice is `PAID` and within the acceptance window (`expiresAt`); reverts with `AcceptanceWindowExceeded` once that window has passed. `releaseAt` is set to `block.timestamp + holdPeriod`, using the hold period fixed on the invoice at creation, and the heap entry is rescheduled accordingly.
 
 ```solidity
-function acceptPayment(uint216 _invoiceId) public;
+function acceptPayment(uint216 _invoiceId) public whenNotPaused;
 ```
 
 **Parameters**
@@ -225,7 +224,7 @@ Marks the specified invoice as rejected and refunds the payer.
 This function updates the invoice status to `REJECTED`, refunds the payer via the escrow contract, and emits the `InvoiceRejected` event. Same access-control/window rules as `acceptPayment` (seller only, within the acceptance window).
 
 ```solidity
-function rejectPayment(uint216 _invoiceId) public;
+function rejectPayment(uint216 _invoiceId) public whenNotPaused;
 ```
 
 **Parameters**
@@ -257,7 +256,7 @@ Releases the funds held in escrow for a specific invoice to the seller.
 Only callable by the seller. Invoice must be in `ACCEPTED` state (reverts `InvalidInvoiceState` otherwise) and `releaseAt` must have passed (reverts `HoldPeriodHasNotBeenExceeded` otherwise). Deducts the platform fee before transferring the net amount to the seller, using the fee rate captured on the invoice at creation (`feeRate`) — not the current global rate, so a later change to the global rate never affects an already-created invoice.
 
 ```solidity
-function release(uint216 _invoiceId) public;
+function release(uint216 _invoiceId) public whenNotPaused;
 ```
 
 **Parameters**
@@ -270,10 +269,10 @@ function release(uint216 _invoiceId) public;
 
 Refunds the buyer of a specific invoice when the seller fails to act in time.
 
-Invoice must be in `PAID` state and the decision window (`expiresAt`) must have elapsed, otherwise reverts with `InvoiceNotEligibleForRefund`. Attempts to withdraw the price to the buyer; on success the invoice transitions to `REFUNDED`, is removed from the heap, and its balance is zeroed. On withdrawal failure, the retry counter is incremented and the invoice stays `PAID` for a future retry; once retries would exceed `MAX_WITHDRAWAL_RETRIES`, the invoice is instead removed from the heap and transitions to `LOCKED` (recoverable only via [releaseLocked](#releaselocked)). Guarded by `nonReentrant`.
+Invoice must be in `PAID` state and the decision window (`expiresAt`) must have elapsed, otherwise reverts with `InvoiceNotEligibleForRefund`. Attempts to withdraw the price to the buyer; on success the invoice transitions to `REFUNDED`, is removed from the heap, and its balance is zeroed. On withdrawal failure, the retry counter is incremented and the invoice stays `PAID` for a future retry; once retries would exceed `MAX_WITHDRAWAL_RETRIES`, the escrowed funds are instead burned to `address(0)` and the invoice transitions to `BURNED` — this is terminal and unrecoverable; there is no `releaseLocked`-style recovery path anymore. Guarded by `nonReentrant`.
 
 ```solidity
-function refundBuyer(uint216 _invoiceId) public nonReentrant;
+function refundBuyer(uint216 _invoiceId) public nonReentrant whenNotPaused;
 ```
 
 **Parameters**
@@ -281,26 +280,6 @@ function refundBuyer(uint216 _invoiceId) public nonReentrant;
 |     Name     |    Type   |              Description              |
 | :----------: | :-------: | :-----------------------------------: |
 | `_invoiceId` | `uint216` | The ID of the invoice to be refunded. |
-
-#### releaseLocked
-
-Recovers funds from a permanently locked invoice by sending them to a specified recipient.
-
-Only callable by an authorized address (owner or storage contract). Valid only for invoices in the `LOCKED` state. Withdraws the caller-supplied `_amount` from escrow to `_recipient` and decrements the invoice's tracked `balance` by that amount — the caller is responsible for supplying the correct amount (use `getInvoiceData` to check the remaining escrow balance).
-
-**Note:** the code only flips the invoice's `state` to `RELEASED` on an in-memory copy when `_amount` exactly equals the remaining `balance`, and that assignment is never written back to storage — so on-chain, the invoice's persisted `state` remains `LOCKED` even after a full recovery. Only `balance` is actually updated in storage.
-
-```solidity
-function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external onlyAuthorized;
-```
-
-**Parameters**
-
-|     Name     |    Type   |                           Description                          |
-| :----------: | :-------: | :------------------------------------------------------------: |
-| `_invoiceId` | `uint216` |             The ID of the locked invoice.                      |
-| `_recipient` | `address` | The address to receive the recovered funds.                    |
-|  `_amount`   | `uint256` | The amount to transfer from the escrow.                        |
 
 #### hasDueTasks
 
@@ -323,25 +302,8 @@ Processes due invoice tasks (auto-release and auto-refund) within the gas thresh
 Only callable by the owner or by `automation` (reverts with `NotAuthorized` otherwise). Guarded by `nonReentrant`. The CRE/Gelato-specific entrypoints and forwarder/workflow-owner configuration that used to live here have moved to [PaymentAutomation.sol](paymentautomation.sol.md) — this contract now only exposes the bare `hasDueTasks`/`processDueTasks` pair and trusts nothing but the `automation` address.
 
 ```solidity
-function processDueTasks() external nonReentrant;
+function processDueTasks() external nonReentrant whenNotPaused;
 ```
-
-#### setInvoiceReleaseTime
-
-Sets a custom hold period for a specific invoice.
-
-Only callable by the owner. Invoice must be in ACCEPTED state. The new release time is computed as `block.timestamp + _holdPeriod`. The invoice's heap entry is rescheduled to the new release time.
-
-```solidity
-function setInvoiceReleaseTime(uint216 _invoiceId, uint40 _holdPeriod) external;
-```
-
-**Parameters**
-
-|      Name     |    Type   |           Description           |
-| :-----------: | :-------: | :-----------------------------: |
-|  `_invoiceId` | `uint216` |      The ID of the invoice.     |
-| `_holdPeriod` |  `uint40` | The hold period from now in seconds. |
 
 #### calculateFee
 
@@ -427,6 +389,20 @@ function getAutomation() external view returns (address automationAddress);
 | :-------------------: | :-------: | :-----------------------------------------: |
 | `automationAddress` | `address` | The configured automation adapter address. |
 
+#### getDecisionWindow
+
+Returns the window sellers have to accept or reject a payment after the buyer pays.
+
+```solidity
+function getDecisionWindow() external view returns (uint256 decisionWindowValue);
+```
+
+**Returns**
+
+|         Name          |    Type   |                 Description                |
+| :----------------------: | :-------: | :---------------------------------------------: |
+| `decisionWindowValue` | `uint256` | The current decision window in seconds. |
+
 #### getNextInvoiceNonce
 
 Gets the current invoice nonce counter.
@@ -505,6 +481,7 @@ struct Invoice {
     uint40 releaseAt;
     uint40 invalidateAt;
     uint40 expiresAt;
+    uint32 holdPeriod;
     uint8 state;
     uint8 withdrawalRetries;
     uint16 feeRate;
@@ -524,6 +501,7 @@ struct Invoice {
 |      `releaseAt`     |  `uint40` |                              The timestamp when funds in escrow can be released to the seller.                                |
 |    `invalidateAt`    |  `uint40` |                        The timestamp after which the invoice is considered invalid if unpaid.                                 |
 |      `expiresAt`     |  `uint40` | The timestamp after which the seller can no longer take action (accept/reject), and the buyer is refunded. |
+|     `holdPeriod`     | `uint32`  | Escrow hold duration (in seconds) set by the seller at creation, counted from acceptance. `0` means funds are releasable as soon as the payment is accepted. |
 |        `state`       |  `uint8`  |                                          The current state of the invoice.                                                    |
 | `withdrawalRetries`  |  `uint8`  |     Number of failed `IEscrow.withdraw` attempts by the automation path. Packed with `state` in the same storage slot.        |
 |       `feeRate`      | `uint16`  | The platform fee rate (in basis points) captured at invoice creation. Releases always charge this rate, so later changes to the global fee rate do not affect existing invoices. |
@@ -627,19 +605,6 @@ event InvoiceReleased(uint216 indexed invoiceId, uint256 sellerAmount, uint256 f
 | `sellerAmount` | `uint256` | The net amount transferred to the seller, after fees. |
 | `fee`          | `uint256` | The platform fee deducted and sent to the fee receiver. |
 
-#### UpdateHoldPeriod
-
-Emitted when the hold period of a given invoice is updated to a new timestamp.
-
-```solidity
-event UpdateHoldPeriod(uint216 indexed invoiceId, uint256 indexed releaseDueTimestamp);
-```
-
-| Name                   | Type      | Description                                                  |
-| :---------------------: | :-------: | :-----------------------------------------------------------: |
-| `invoiceId`            | `uint216` | The key of the invoice whose hold period was updated.        |
-| `releaseDueTimestamp`  | `uint256` | The new hold period expressed as a UNIX timestamp.           |
-
 #### WithdrawalRetried
 
 Emitted when an automated withdrawal attempt fails and is retried.
@@ -667,23 +632,9 @@ event AutomationUpdated(address indexed automation);
 | :-------------: | :-------: | :---------------------------------------: |
 | `automation` | `address` | The new automation adapter address. |
 
-#### LockedPaymentRecovered
-
-Emitted when a locked invoice's funds are manually recovered by an authorized address.
-
-```solidity
-event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
-```
-
-| Name        | Type      | Description                                       |
-| :----------: | :-------: | :------------------------------------------------: |
-| `invoiceId` | `uint216` | The ID of the locked invoice that was recovered.  |
-| `recipient` | `address` | The address that received the recovered funds.    |
-| `amount`    | `uint256` | The amount of funds recovered.                    |
-
 #### TransferFailed
 
-Emitted when a transfer from the escrow fails.
+Emitted when a transfer from the escrow fails. Best-effort for fee transfers, which stay in escrow. On the final refund attempt it precedes `PaymentBurned`.
 
 ```solidity
 event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
@@ -694,6 +645,19 @@ event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint2
 | `invoiceId` | `uint216` | The ID of the invoice associated with the transfer. |
 | `recipient` | `address` | The address the transfer was attempted to.   |
 | `amount`    | `uint256` | The amount that failed to transfer.          |
+
+#### PaymentBurned
+
+Emitted when an invoice's escrowed funds are burned to `address(0)`. The funds are permanently destroyed; there is no recovery path.
+
+```solidity
+event PaymentBurned(uint216 indexed invoiceId, uint256 amount);
+```
+
+| Name        | Type      | Description                                  |
+| :----------: | :-------: | :-------------------------------------------: |
+| `invoiceId` | `uint216` | The invoice whose escrowed funds were burned. |
+| `amount`    | `uint256` | The amount of ETH sent to `address(0)`.       |
 
 ### Errors
 
@@ -712,3 +676,4 @@ event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint2
 | `InvoiceNotEligibleForRefund()` | Thrown when a refund to the buyer cannot be issued (invoice not `PAID` or decision window not yet elapsed). |
 | `HoldPeriodHasNotBeenExceeded()` | Thrown when the hold period for an invoice has not yet been exceeded. |
 | `EscrowWithdrawFailed()` | Thrown when the escrow withdrawal fails during a manual release, reject, or refund. |
+| `ContractPaused()` | Thrown when a value-moving entrypoint is called while the system is paused. |

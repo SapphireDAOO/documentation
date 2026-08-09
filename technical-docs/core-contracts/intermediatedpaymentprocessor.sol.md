@@ -9,6 +9,8 @@ The `IntermediatedPaymentProcessor` contract supports creating, managing, and se
 * Invoice Cancellation
 * Refunds
 
+Every value-moving entrypoint (`createSingleInvoice`, `createMetaInvoice`, `payInvoice`, `payMetaInvoiceWithValue`, `payMetaInvoice`, `createDispute`, `handleDispute`, `release`, `refund`) reverts with `ContractPaused` while [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md#pause) reports the system paused. `cancelInvoice` and `resolveDispute` are exempt since neither moves funds.
+
 You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/IntermediatedPaymentProcessor.sol)
 
 ### State Variables
@@ -154,6 +156,7 @@ Only callable by the intermediated platform.
 function createSingleInvoice(InvoiceCreationParam memory _param)
     external
     onlyMarketplace
+    whenNotPaused
     returns (uint216 invoiceId);
 ```
 
@@ -179,6 +182,7 @@ Only callable by the intermediated platform. Each sub-invoice is created using t
 function createMetaInvoice(InvoiceCreationParam[] memory _param)
     external
     onlyMarketplace
+    whenNotPaused
     returns (uint216 metaInvoiceId);
 ```
 
@@ -201,7 +205,7 @@ Pays a single invoice using native ETH or an approved ERC20 token.
 Any caller other than the invoice's seller may pay — the payer becomes the invoice's `buyer` (there's no pre-existing buyer requirement; reverts with `BuyerCannotBeSeller` only if the caller is the seller). Use `address(0)` for native payments. Guarded by `nonReentrant`.
 
 ```solidity
-function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant;
+function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant whenNotPaused;
 ```
 
 **Parameters**
@@ -218,7 +222,7 @@ Pays all sub-invoices in a meta-invoice using native ETH.
 Caller must send exactly the oracle-converted total for the meta-invoice price. Any dust from per-sub-invoice integer rounding is refunded to the caller. Canceled sub-invoices are automatically excluded. Sub-invoices not in CREATED state are silently skipped. Guarded by `nonReentrant`.
 
 ```solidity
-function payMetaInvoiceWithValue(uint216 _invoiceId) external payable nonReentrant;
+function payMetaInvoiceWithValue(uint216 _invoiceId) external payable nonReentrant whenNotPaused;
 ```
 
 **Parameters**
@@ -234,7 +238,7 @@ Pays all sub-invoices in a meta invoice using native ETH or ERC20.
 Canceled sub-invoices are automatically excluded. Sub-invoices not in CREATED state are silently skipped. Guarded by `nonReentrant`.
 
 ```solidity
-function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonReentrant;
+function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonReentrant whenNotPaused;
 ```
 
 **Parameters**
@@ -251,7 +255,7 @@ Creates a dispute for an invoice.
 Callable only by the intermediated platform. Only valid for invoices in the PAID state (reverts `InvalidInvoiceState` otherwise). Transitions the invoice to DISPUTED, blocking `release` until the dispute is resolved, dismissed, or settled. There is no automated release queue/heap in this contract — release only ever happens via an explicit intermediated-platform call.
 
 ```solidity
-function createDispute(uint216 _invoiceId) external onlyMarketplace;
+function createDispute(uint216 _invoiceId) external onlyMarketplace whenNotPaused;
 ```
 
 **Parameters**
@@ -267,7 +271,10 @@ handle a dispute on a given invoice.
 Callable only by the intermediated platform. Must be called after a dispute is created. The resolution can be DISPUTE\_DISMISSED, or DISPUTE\_SETTLED. If settled, the seller and buyer receive a split of the funds based on sellerShare, with the seller's share subject to the platform fee rate captured on the invoice at creation (`feeRate`).
 
 ```solidity
-function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare) external onlyMarketplace;
+function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare)
+    external
+    onlyMarketplace
+    whenNotPaused;
 ```
 
 **Parameters**
@@ -285,7 +292,7 @@ Releases escrowed funds to the seller after the release window has passed.
 Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller, using the fee rate captured on the invoice at creation (`feeRate`) — not the current global fee rate, so a later change to the global rate never affects an already-created invoice. The invoice transitions to RELEASED and its balance is zeroed. There is no heap — this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
 
 ```solidity
-function release(uint216 _invoiceId) external onlyMarketplace;
+function release(uint216 _invoiceId) external onlyMarketplace whenNotPaused;
 ```
 
 **Parameters**
@@ -299,7 +306,7 @@ function release(uint216 _invoiceId) external onlyMarketplace;
 Issues a partial or full refund for a paid invoice. Callable only by the intermediated platform; invoice must be in the PAID state. `_refundShare` must be between 1 and 10,000 basis points. A full refund (10,000 BPS) transitions the invoice to REFUNDED; a partial refund reduces the escrow balance but leaves the invoice in PAID state so it can still be released later.
 
 ```solidity
-function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketplace;
+function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketplace whenNotPaused;
 ```
 
 **Parameters**
@@ -774,7 +781,7 @@ event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
 
 #### LockedPaymentRecovered
 
-Declared in `IIntermediatedPaymentProcessor` but **never emitted** by this contract — there is no `releaseLocked`-equivalent function here (unlike `SimplePaymentProcessor`), so this event is currently unreachable dead ABI surface.
+Declared in `IIntermediatedPaymentProcessor` but **never emitted** by this contract — there is no locked/burned-fund recovery path here at all, so this event is currently unreachable dead ABI surface. (`SimplePaymentProcessor` no longer has an equivalent either — exhausted withdrawal retries there now burn the funds instead of locking them for recovery.)
 
 ```solidity
 event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
@@ -836,6 +843,7 @@ event OracleUpdated(address indexed previousOracle, address indexed newOracle);
 | `InvalidMetaInvoicePaymentAmount(uint256 sent, uint256 expected)` | Thrown when a meta-invoice native payment does not match the expected total. |
 | `MetaInvoiceAlreadyExists()` | Thrown when a computed meta-invoice ID is already assigned in storage. |
 | `InvalidDisputeResolution()` | Thrown when the dispute resolution type is invalid. |
+| `ContractPaused()` | Thrown when a value-moving entrypoint is called while the system is paused. |
 | `InvalidSellersPayoutShare()` | Thrown when the seller's payout share exceeds the allowed limit (10000 BPS). |
 | `InvalidSeller()` | Thrown when an invoice is created with the zero address as the seller. |
 | `EscrowWithdrawFailed()` | Thrown when the escrow contract fails to execute a withdrawal. |

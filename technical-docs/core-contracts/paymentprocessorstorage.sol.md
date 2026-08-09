@@ -12,6 +12,7 @@ PaymentProcessorStorage.sol enables:
 * System-wide configuration for fees, hold periods, and gas thresholds
 * Access control for privileged contract calls
 * State-sharing across other contracts in the SapphireDao ecosystem
+* Pausing both payment processors, either indefinitely (owner) or temporarily without owner involvement (emergency pauser)
 
 ### State Variables
 
@@ -29,6 +30,14 @@ Total basis points used for percentage calculations. 10\_000 = 100%.
 
 ```solidity
 uint256 public constant BASIS_POINTS = 10_000
+```
+
+#### EMERGENCY\_PAUSE\_DURATION
+
+How long an emergency pause holds without owner approval before it lapses automatically.
+
+```solidity
+uint256 public constant EMERGENCY_PAUSE_DURATION = 24 hours
 ```
 
 ### Functions
@@ -166,6 +175,106 @@ function setMarketplaceAddress(address _marketplaceAddress) external onlyOwner;
 |          Name         |    Type   |          Description         |
 | :-------------------: | :-------: | :--------------------------: |
 | `_marketplaceAddress` | `address` | The new intermediated platform address. |
+
+#### pause
+
+Halts every value-moving entrypoint on both payment processors.
+
+Only callable by the contract owner. Stays in effect until `unpause`. Reverts with `AlreadyPaused` if the system is already paused (whether by owner pause or an active emergency pause).
+
+```solidity
+function pause() external onlyOwner;
+```
+
+#### unpause
+
+Lifts a pause and clears any unresolved emergency pause.
+
+Only callable by the contract owner. Reverts with `NotPaused` if neither an owner pause nor an emergency pause is active.
+
+```solidity
+function unpause() external onlyOwner;
+```
+
+#### emergencyPause
+
+Halts both payment processors for `EMERGENCY_PAUSE_DURATION` (24 hours) without owner involvement.
+
+Only callable by the `emergencyPauser` address (reverts with `NotAuthorized` otherwise). Lapses automatically unless the owner calls `approveEmergencyPause` within the window. The pauser may trigger a fresh one once it lapses. Reverts with `AlreadyPaused` if the system is already paused.
+
+```solidity
+function emergencyPause() external;
+```
+
+#### approveEmergencyPause
+
+Converts an active emergency pause into an indefinite pause (equivalent to `pause`).
+
+Only callable by the contract owner, and only while the emergency pause has not expired; reverts with `NoActiveEmergencyPause` otherwise.
+
+```solidity
+function approveEmergencyPause() external onlyOwner;
+```
+
+#### setEmergencyPauser
+
+Sets the address allowed to call `emergencyPause`.
+
+Only callable by the contract owner. Set to `address(0)` to revoke.
+
+```solidity
+function setEmergencyPauser(address _emergencyPauser) external onlyOwner;
+```
+
+**Parameters**
+
+|        Name         |    Type   |               Description               |
+| :--------------------: | :-------: | :-----------------------------------------: |
+| `_emergencyPauser` | `address` | The new emergency pauser address. |
+
+#### isPaused
+
+Returns whether the payment processors are currently paused.
+
+True for an owner pause, or an emergency pause that has not yet expired.
+
+```solidity
+function isPaused() public view returns (bool pausedState);
+```
+
+**Returns**
+
+|      Name      |  Type  |          Description         |
+| :---------------: | :----: | :------------------------------: |
+| `pausedState` | `bool` | True when paused. |
+
+#### getEmergencyPauser
+
+Returns the address allowed to call `emergencyPause`.
+
+```solidity
+function getEmergencyPauser() external view returns (address emergencyPauserAddress);
+```
+
+**Returns**
+
+|          Name           |    Type   |            Description           |
+| :------------------------: | :-------: | :----------------------------------: |
+| `emergencyPauserAddress` | `address` | The emergency pauser address. |
+
+#### getEmergencyPauseExpiry
+
+Returns the timestamp at which an unresolved emergency pause lapses.
+
+```solidity
+function getEmergencyPauseExpiry() external view returns (uint256 expiry);
+```
+
+**Returns**
+
+|   Name   |    Type   |                          Description                         |
+| :--------: | :-------: | :----------------------------------------------------------------: |
+| `expiry` | `uint256` | The expiry timestamp, or 0 when no emergency pause is pending. |
 
 #### getPaymentValidityDuration
 
@@ -406,6 +515,67 @@ event PaymentValidityDurationUpdated(uint256 validityDuration);
 | :-------------------: | :-------: | :----------------------------------------------------: |
 | `validityDuration` | `uint256` | The new payment validity window in seconds. |
 
+#### Paused
+
+Emitted when the owner pauses the payment processors.
+
+```solidity
+event Paused(address indexed account);
+```
+
+|   Name    |    Type   |            Description           |
+| :---------: | :-------: | :----------------------------------: |
+| `account` | `address` | The owner that paused. |
+
+#### Unpaused
+
+Emitted when the owner lifts a pause.
+
+```solidity
+event Unpaused(address indexed account);
+```
+
+|   Name    |    Type   |            Description           |
+| :---------: | :-------: | :----------------------------------: |
+| `account` | `address` | The owner that unpaused. |
+
+#### EmergencyPaused
+
+Emitted when the emergency pauser halts the payment processors.
+
+```solidity
+event EmergencyPaused(address indexed account, uint256 expiry);
+```
+
+|   Name    |    Type   |                        Description                        |
+| :---------: | :-------: | :------------------------------------------------------------: |
+| `account` | `address` |               The emergency pauser.                     |
+| `expiry` | `uint256` | The timestamp at which the pause lapses without owner approval. |
+
+#### EmergencyPauseApproved
+
+Emitted when the owner converts an emergency pause into an indefinite pause.
+
+```solidity
+event EmergencyPauseApproved(address indexed account);
+```
+
+|   Name    |    Type   |            Description           |
+| :---------: | :-------: | :----------------------------------: |
+| `account` | `address` | The owner that approved. |
+
+#### EmergencyPauserUpdated
+
+Emitted when the emergency pauser address is updated.
+
+```solidity
+event EmergencyPauserUpdated(address indexed emergencyPauser);
+```
+
+|         Name          |    Type   |                Description               |
+| :-----------------------: | :-------: | :-------------------------------------------: |
+| `emergencyPauser` | `address` | The new emergency pauser address. |
+
 ### Errors
 
 | Error | Description |
@@ -413,3 +583,6 @@ event PaymentValidityDurationUpdated(uint256 validityDuration);
 | `NotAuthorized()` | Thrown when a caller attempts an action without the required authorization. |
 | `HoldPeriodCanNotBeZero()` | Thrown when the hold period provided is zero, which is invalid. |
 | `InvalidFeeRate()` | Thrown when the provided fee rate exceeds the maximum allowed (10,000 basis points = 100%). |
+| `AlreadyPaused()` | Thrown when pausing a system that is already paused, or that has an unresolved emergency pause. |
+| `NotPaused()` | Thrown when unpausing a system that is not paused. |
+| `NoActiveEmergencyPause()` | Thrown when approving an emergency pause that is absent or already expired. |
