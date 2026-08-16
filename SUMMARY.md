@@ -4,15 +4,15 @@
 
 ## User Docs
 
-* [Introduction](user-docs/quickstart.md)
-* [Participants](user-docs/publish-your-docs.md)
+* [Introduction](user-docs/introduction.md)
+* [Participants](user-docs/participants.md)
 * [Invoices](user-docs/invoices.md)
 
 ## How-to guide
 
-* [Use The Simple Processor](how-to-guide/markdown.md)
-* [Use The Intermediated Processor](how-to-guide/interactive-blocks.md)
-* [Handle Disputes](how-to-guide/openapi.md)
+* [Use The Simple Processor](how-to-guide/use-the-simple-processor.md)
+* [Use The Intermediated Processor](how-to-guide/use-the-intermediated-processor.md)
+* [Handle Disputes](how-to-guide/handle-disputes.md)
 * [Release & Refunds](how-to-guide/release-and-refunds.md)
 * [Notes](how-to-guide/notes.md)
 

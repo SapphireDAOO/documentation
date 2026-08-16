@@ -255,7 +255,7 @@ See [core-contracts/multisig.sol.md](core-contracts/multisig.sol.md) for the ful
 
 #### Dashboard-metrics entities
 
-Full detail lives in [`metric.md`](../metric.md) at the repo root; summary:
+Full detail lives in [`dashboard-metrics-technical-spec.md`](../dashboard-metrics-technical-spec.md) at the repo root; summary:
 
 | Entity | Purpose |
 | :--- | :--- |
@@ -459,4 +459,4 @@ Confirm the current deployment's query endpoint in `payment-processor-subgraph/s
 
 #### Time-travel: volume 30 days ago
 
-Not applicable: historical windows are served by the subgraph's native **Timeseries and Aggregations** (`VolumeStats`, `EscrowStat`, etc.), not block-by-timestamp lookups. See [`metric.md`](../metric.md#windowed-volume--percentage-change) for the exact query pattern.
+Not applicable: historical windows are served by the subgraph's native **Timeseries and Aggregations** (`VolumeStats`, `EscrowStat`, etc.), not block-by-timestamp lookups. See [`dashboard-metrics-technical-spec.md`](../dashboard-metrics-technical-spec.md#windowed-volume--percentage-change) for the exact query pattern.

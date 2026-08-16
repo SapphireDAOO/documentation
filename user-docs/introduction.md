@@ -1,0 +1,5 @@
+# Introduction
+
+SapphireDAO is an open-source, decentralized payment platform that allows users to pay for goods and services using cryptocurrency. Smart contracts process payments, which are kept in escrow until release requirements are fulfilled.&#x20;
+
+Sellers generate invoices directly in the [Simple Processor](../how-to-guide/use-the-simple-processor.md). In contrast, invoices can also be generated through authorized third-party platforms via the [API](../technical-docs/api-communication.md) calling the [Intermediated Processor](../technical-docs/core-contracts/intermediatedpaymentprocessor.sol.md), which offers additional features such as dispute resolution, support for different payments options, and [meta-invoices](invoices.md#meta-invoice)
