@@ -2,7 +2,7 @@
 
 ### For Sellers
 
-Connect your wallet to SapphireDao. Navigate to **Create Invoice** to create an invoice. Enter the payment amount in ETH, set how long funds should stay in escrow after you accept payment (the escrow hold period — leave it at 0 to make funds releasable immediately on acceptance), optionally add a [note](notes.md), and submit the Invoice. The system generates a payment link, and a QR code to share with the Buyer. The hold period is fixed once the invoice is created and cannot be changed afterwards by anyone, including the platform admin.
+Connect your wallet to SapphireDao. Navigate to **Create Invoice** to create an invoice. Enter the payment amount in ETH, set how long funds should stay in escrow after you accept payment (the escrow hold period; leave it at 0 to make funds releasable immediately on acceptance), optionally add a [note](notes.md), and submit the Invoice. The system generates a payment link, and a QR code to share with the Buyer. The hold period is fixed once the invoice is created and cannot be changed afterwards by anyone, including the platform admin.
 
 Track invoices on the dashboard’s Invoice List, where users can monitor status like
 
@@ -18,12 +18,12 @@ Track invoices on the dashboard’s Invoice List, where users can monitor status
 
 When the Buyer makes payment, the funds are held in escrow. After reviewing the payment, the seller decides whether to accept it and moves the invoice to the release period, rejecting it to refund the Buyer. The seller has a limited time window to take action;  if not action is taken within that period, the escrow funds are automatically refunded to the Buyer.
 
-Once the payment is accepted, the release time is set to acceptance time plus the hold period the seller chose when creating the invoice — this period cannot be changed by anyone after creation, including the platform admin. After this period, the funds are released automatically to the seller, and the invoice status updates to Released once the release is triggered.
+Once the payment is accepted, the release time is set to acceptance time plus the hold period the seller chose when creating the invoice; this period cannot be changed by anyone after creation, including the platform admin. After this period, the funds are released automatically to the seller, and the invoice status updates to Released once the release is triggered.
 
 {% hint style="info" %}
 **Key  Considerations for Creators**
 
-* The escrow hold period is set by you when you create the invoice and is locked in from that point on — it cannot be adjusted later, even by the platform admin.
+* The escrow hold period is set by you when you create the invoice and is locked in from that point on; it cannot be adjusted later, even by the platform admin.
 * Invoices expire if not paid within a limited time.
 {% endhint %}
 

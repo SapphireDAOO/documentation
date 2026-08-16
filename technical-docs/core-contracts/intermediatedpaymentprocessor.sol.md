@@ -25,13 +25,13 @@ IPaymentProcessorStorage public immutable ppStorage
 
 #### oracle
 
-OracleManager used to convert USD-denominated invoice prices into payment-token amounts. Not immutable — updatable via `setOracle`.
+OracleManager used to convert USD-denominated invoice prices into payment-token amounts. Not immutable; updatable via `setOracle`.
 
 ```solidity
 IOracleManager public oracle
 ```
 
-The invoice status codes and fee/decimal constants below are plain file-level constants imported from `constants/Intermediated.sol`, not `public` members of the contract itself — there is no on-chain getter like `IntermediatedPaymentProcessor.CREATED()`.
+The invoice status codes and fee/decimal constants below are plain file-level constants imported from `constants/Intermediated.sol`, not `public` members of the contract itself; there is no on-chain getter like `IntermediatedPaymentProcessor.CREATED()`.
 
 #### CREATED
 
@@ -202,7 +202,7 @@ function createMetaInvoice(InvoiceCreationParam[] memory _param)
 
 Pays a single invoice using native ETH or an approved ERC20 token.
 
-Any caller other than the invoice's seller may pay — the payer becomes the invoice's `buyer` (there's no pre-existing buyer requirement; reverts with `BuyerCannotBeSeller` only if the caller is the seller). Use `address(0)` for native payments. Guarded by `nonReentrant`.
+Any caller other than the invoice's seller may pay; the payer becomes the invoice's `buyer` (there's no pre-existing buyer requirement; reverts with `BuyerCannotBeSeller` only if the caller is the seller). Use `address(0)` for native payments. Guarded by `nonReentrant`.
 
 ```solidity
 function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant whenNotPaused;
@@ -252,7 +252,7 @@ function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonR
 
 Creates a dispute for an invoice.
 
-Callable only by the intermediated platform. Only valid for invoices in the PAID state (reverts `InvalidInvoiceState` otherwise). Transitions the invoice to DISPUTED, blocking `release` until the dispute is resolved, dismissed, or settled. There is no automated release queue/heap in this contract — release only ever happens via an explicit intermediated-platform call.
+Callable only by the intermediated platform. Only valid for invoices in the PAID state (reverts `InvalidInvoiceState` otherwise). Transitions the invoice to DISPUTED, blocking `release` until the dispute is resolved, dismissed, or settled. There is no automated release queue/heap in this contract; release only ever happens via an explicit intermediated-platform call.
 
 ```solidity
 function createDispute(uint216 _invoiceId) external onlyMarketplace whenNotPaused;
@@ -289,7 +289,7 @@ function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerSha
 
 Releases escrowed funds to the seller after the release window has passed.
 
-Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller, using the fee rate captured on the invoice at creation (`feeRate`) — not the current global fee rate, so a later change to the global rate never affects an already-created invoice. The invoice transitions to RELEASED and its balance is zeroed. There is no heap — this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
+Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global fee rate, so a later change to the global rate never affects an already-created invoice. The invoice transitions to RELEASED and its balance is zeroed. There is no heap; this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
 
 ```solidity
 function release(uint216 _invoiceId) external onlyMarketplace whenNotPaused;
@@ -781,7 +781,7 @@ event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
 
 #### LockedPaymentRecovered
 
-Declared in `IIntermediatedPaymentProcessor` but **never emitted** by this contract — there is no locked/burned-fund recovery path here at all, so this event is currently unreachable dead ABI surface. (`SimplePaymentProcessor` no longer has an equivalent either — exhausted withdrawal retries there now burn the funds instead of locking them for recovery.)
+Declared in `IIntermediatedPaymentProcessor` but **never emitted** by this contract; there is no locked/burned-fund recovery path here at all, so this event is currently unreachable dead ABI surface. (`SimplePaymentProcessor` no longer has an equivalent either; exhausted withdrawal retries there now burn the funds instead of locking them for recovery.)
 
 ```solidity
 event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
@@ -795,7 +795,7 @@ event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipien
 
 #### TransferFailed
 
-Emitted when a best-effort fee or payout transfer fails during release or dispute settlement. Does not revert the calling transaction — funds remain in escrow for later manual recovery.
+Emitted when a best-effort fee or payout transfer fails during release or dispute settlement. Does not revert the calling transaction; funds remain in escrow for later manual recovery.
 
 ```solidity
 event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);

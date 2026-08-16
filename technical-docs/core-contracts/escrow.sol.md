@@ -43,7 +43,7 @@ constructor(uint216 _invoiceId, address _paymentProcessorAddress) payable;
 
 Withdraws ETH or ERC20 tokens from the escrow contract to a specified receiver.
 
-Only callable by the payment processor. Transfers ETH if `token` is the zero address, otherwise transfers ERC20 tokens. Uses a low-level call for both ETH and ERC20 transfers and does **not** revert on failure — the return value must be checked by the caller.
+Only callable by the payment processor. Transfers ETH if `token` is the zero address, otherwise transfers ERC20 tokens. Uses a low-level call for both ETH and ERC20 transfers and does **not** revert on failure; the return value must be checked by the caller.
 
 ```solidity
 function withdraw(address _token, address _receiver, uint256 _amount) external onlyPaymentProcessor returns (bool success);

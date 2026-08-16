@@ -8,7 +8,7 @@ Contract Address: [0xd4a9e5ac9f54beccd7c12ca6bd7bd026bbf0058d](https://sepolia.e
 
 You can find the full implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/SimplePaymentProcessor.sol)
 
-Scheduled invoices are kept in an internal min-heap and processed by `processDueTasks`, which the registered [PaymentAutomation.sol](paymentautomation.sol.md) adapter calls on behalf of a keeper network (Chainlink CRE or Gelato). This contract holds no keeper configuration of its own — no forwarder address, no workflow owner, no CRE report handling; all of that now lives in the `PaymentAutomation` adapter.
+Scheduled invoices are kept in an internal min-heap and processed by `processDueTasks`, which the registered [PaymentAutomation.sol](paymentautomation.sol.md) adapter calls on behalf of a keeper network (Chainlink CRE or Gelato). This contract holds no keeper configuration of its own: no forwarder address, no workflow owner, no CRE report handling; all of that now lives in the `PaymentAutomation` adapter.
 
 Every value-moving entrypoint (everything except `cancelInvoice`, which moves no funds) reverts with `ContractPaused` while [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md#pause) reports the system paused.
 
@@ -23,7 +23,7 @@ Every value-moving entrypoint (everything except `cancelInvoice`, which moves no
 
 ### State Variables
 
-The invoice status codes and retry/fee constants below are plain file-level constants imported from `constants/Simple.sol`, not `public` members of the contract itself — there is no on-chain getter like `SimplePaymentProcessor.CREATED()`.
+The invoice status codes and retry/fee constants below are plain file-level constants imported from `constants/Simple.sol`, not `public` members of the contract itself; there is no on-chain getter like `SimplePaymentProcessor.CREATED()`.
 
 #### CREATED
 
@@ -121,7 +121,7 @@ Reference to the external Payment Processor storage contract.
 IPaymentProcessorStorage public immutable ppStorage
 ```
 
-`decisionWindow` is a private state variable (previously `public`) — read it via [getDecisionWindow](#getdecisionwindow) instead of a direct getter.
+`decisionWindow` is a private state variable (previously `public`); read it via [getDecisionWindow](#getdecisionwindow) instead of a direct getter.
 
 ### Functions
 
@@ -131,7 +131,7 @@ Initializes the payment processor with its storage and notes contract references
 
 Sets `ppStorage` and `notes`, initializes `decisionWindow` to `SELLER_DEFAULT_DECISION_WINDOW`, and assigns `minimumInvoiceValue` directly. Fee rate, fee receiver, and the default escrow hold period all live in `ppStorage`, not here.
 
-The minimum invoice value is assigned directly rather than via `setMinimumInvoiceValue`: this contract is deployed (via `MasterDeployer`) against a predicted storage address before `PaymentProcessorStorage` actually exists, so the setter's `onlyAuthorized` check — which calls into `ppStorage` — would revert at construction time.
+The minimum invoice value is assigned directly rather than via `setMinimumInvoiceValue`: this contract is deployed (via `MasterDeployer`) against a predicted storage address before `PaymentProcessorStorage` actually exists, so the setter's `onlyAuthorized` check, which calls into `ppStorage`, would revert at construction time.
 
 ```solidity
 constructor(address _paymentProcessorStorageAddress, uint256 _minimumInvoicePrice, address _notesAddress);
@@ -149,7 +149,7 @@ constructor(address _paymentProcessorStorageAddress, uint256 _minimumInvoicePric
 
 Creates a new invoice with a specified price and escrow hold period.
 
-Optionally stores a reference to the user's off-chain notes file. The hold period is fixed here and cannot be changed afterwards, including by the owner — there is no equivalent to the old `setInvoiceReleaseTime` override anymore. Pass `0` to make funds releasable immediately on acceptance.
+Optionally stores a reference to the user's off-chain notes file. The hold period is fixed here and cannot be changed afterwards, including by the owner; there is no equivalent to the old `setInvoiceReleaseTime` override anymore. Pass `0` to make funds releasable immediately on acceptance.
 
 ```solidity
 function createInvoice(uint256 _price, uint32 _holdPeriod, bytes memory _storageRef, bool _share)
@@ -253,7 +253,7 @@ function cancelInvoice(uint216 _invoiceId) external;
 
 Releases the funds held in escrow for a specific invoice to the seller.
 
-Only callable by the seller. Invoice must be in `ACCEPTED` state (reverts `InvalidInvoiceState` otherwise) and `releaseAt` must have passed (reverts `HoldPeriodHasNotBeenExceeded` otherwise). Deducts the platform fee before transferring the net amount to the seller, using the fee rate captured on the invoice at creation (`feeRate`) — not the current global rate, so a later change to the global rate never affects an already-created invoice.
+Only callable by the seller. Invoice must be in `ACCEPTED` state (reverts `InvalidInvoiceState` otherwise) and `releaseAt` must have passed (reverts `HoldPeriodHasNotBeenExceeded` otherwise). Deducts the platform fee before transferring the net amount to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global rate, so a later change to the global rate never affects an already-created invoice.
 
 ```solidity
 function release(uint216 _invoiceId) public whenNotPaused;
@@ -269,7 +269,7 @@ function release(uint216 _invoiceId) public whenNotPaused;
 
 Refunds the buyer of a specific invoice when the seller fails to act in time.
 
-Invoice must be in `PAID` state and the decision window (`expiresAt`) must have elapsed, otherwise reverts with `InvoiceNotEligibleForRefund`. Attempts to withdraw the price to the buyer; on success the invoice transitions to `REFUNDED`, is removed from the heap, and its balance is zeroed. On withdrawal failure, the retry counter is incremented and the invoice stays `PAID` for a future retry; once retries would exceed `MAX_WITHDRAWAL_RETRIES`, the escrowed funds are instead burned to `address(0)` and the invoice transitions to `BURNED` — this is terminal and unrecoverable; there is no `releaseLocked`-style recovery path anymore. Guarded by `nonReentrant`.
+Invoice must be in `PAID` state and the decision window (`expiresAt`) must have elapsed, otherwise reverts with `InvoiceNotEligibleForRefund`. Attempts to withdraw the price to the buyer; on success the invoice transitions to `REFUNDED`, is removed from the heap, and its balance is zeroed. On withdrawal failure, the retry counter is incremented and the invoice stays `PAID` for a future retry; once retries would exceed `MAX_WITHDRAWAL_RETRIES`, the escrowed funds are instead burned to `address(0)` and the invoice transitions to `BURNED`. This is terminal and unrecoverable; there is no `releaseLocked`-style recovery path anymore. Guarded by `nonReentrant`.
 
 ```solidity
 function refundBuyer(uint216 _invoiceId) public nonReentrant whenNotPaused;
@@ -299,7 +299,7 @@ function hasDueTasks() external view returns (bool dueTasksExist);
 
 Processes due invoice tasks (auto-release and auto-refund) within the gas threshold. Callable by the owner as a manual fallback, or by the registered automation adapter. Processing stops once remaining gas drops below the configured gas threshold, so leftover tasks are picked up on the next call.
 
-Only callable by the owner or by `automation` (reverts with `NotAuthorized` otherwise). Guarded by `nonReentrant`. The CRE/Gelato-specific entrypoints and forwarder/workflow-owner configuration that used to live here have moved to [PaymentAutomation.sol](paymentautomation.sol.md) — this contract now only exposes the bare `hasDueTasks`/`processDueTasks` pair and trusts nothing but the `automation` address.
+Only callable by the owner or by `automation` (reverts with `NotAuthorized` otherwise). Guarded by `nonReentrant`. The CRE/Gelato-specific entrypoints and forwarder/workflow-owner configuration that used to live here have moved to [PaymentAutomation.sol](paymentautomation.sol.md); this contract now only exposes the bare `hasDueTasks`/`processDueTasks` pair and trusts nothing but the `automation` address.
 
 ```solidity
 function processDueTasks() external nonReentrant whenNotPaused;
@@ -309,7 +309,7 @@ function processDueTasks() external nonReentrant whenNotPaused;
 
 Calculates the fee based on the provided amount and the *current* global fee rate.
 
-Fee rate is expressed in basis points (1% = 100). This quotes the rate that would be captured by an invoice created right now — it does **not** reflect what a given existing invoice will actually be charged on release, since `release`/`refundBuyer`/the automated release path all use the fee rate snapshotted on the invoice at creation (`feeRate`), not the current global rate.
+Fee rate is expressed in basis points (1% = 100). This quotes the rate that would be captured by an invoice created right now; it does **not** reflect what a given existing invoice will actually be charged on release, since `release`/`refundBuyer`/the automated release path all use the fee rate snapshotted on the invoice at creation (`feeRate`), not the current global rate.
 
 ```solidity
 function calculateFee(uint256 _amount) public view returns (uint256 feeValue);

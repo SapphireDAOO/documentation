@@ -1,12 +1,12 @@
-# Dashboard Metrics — Technical Spec
+# Dashboard Metrics: Technical Spec
 
-Aggregated metrics maintained in the subgraph for the dashboard. Historical/past-window views are served by the subgraph's native **Timeseries and Aggregations** — daily (and, where useful, hourly) buckets are rolled up automatically by graph-node, so windowed and percentage-change views need no third-party block-by-timestamp lookups or time-travel queries.
+Aggregated metrics maintained in the subgraph for the dashboard. Historical/past-window views are served by the subgraph's native **Timeseries and Aggregations**: daily (and, where useful, hourly) buckets are rolled up automatically by graph-node, so windowed and percentage-change views need no third-party block-by-timestamp lookups or time-travel queries.
 
 ## Schemas
 
 There is no consolidated `metricData` entity. Each metric is backed by its own immutable **timeseries** entity plus an **aggregation** that graph-node rolls up per interval. The only mutable singleton is `GasPaid`. Per-token metrics reference the `PaymentToken` entity (its `id` is the token address; the native token ETH uses the zero address).
 
-### Volume — `PaymentVolume` / `VolumeStats`
+### Volume: `PaymentVolume` / `VolumeStats`
 
 ```graphql
 # One immutable record per payment
@@ -27,7 +27,7 @@ type VolumeStats @aggregation(intervals: ["day"], source: "PaymentVolume") {
 }
 ```
 
-### Escrow — `EscrowBalance` / `EscrowStat`
+### Escrow: `EscrowBalance` / `EscrowStat`
 
 ```graphql
 # Signed escrow deltas (balance): + on payment, − on refund / release / dispute
@@ -51,7 +51,7 @@ type EscrowStat
 }
 ```
 
-### Fees — `FeePaid` / `FeePaidStats`
+### Fees: `FeePaid` / `FeePaidStats`
 
 ```graphql
 type FeePaid @entity(timeseries: true) {
@@ -70,7 +70,7 @@ type FeePaidStats @aggregation(intervals: ["day"], source: "FeePaid") {
 }
 ```
 
-### Invoice activity — `InvoiceActivity` / `InvoiceActivityStats`
+### Invoice activity: `InvoiceActivity` / `InvoiceActivityStats`
 
 ```graphql
 type InvoiceActivity @entity(timeseries: true) {
@@ -88,7 +88,7 @@ type InvoiceActivityStats
 }
 ```
 
-### User metrics — `NewUser` / `ActiveUser`
+### User metrics: `NewUser` / `ActiveUser`
 
 ```graphql
 enum UserRole {
@@ -125,7 +125,7 @@ type ActiveUserStats @aggregation(intervals: ["day"], source: "ActiveUser") {
 }
 ```
 
-### Gas — `GasPaid`
+### Gas: `GasPaid`
 
 ```graphql
 type GasPaid @entity(immutable: false) {
@@ -136,9 +136,9 @@ type GasPaid @entity(immutable: false) {
 }
 ```
 
-### MultiSig — `MultiSigWallet` / `MultiSigSigner` / `MultiSigTransaction` / `MultiSigApproval`
+### MultiSig: `MultiSigWallet` / `MultiSigSigner` / `MultiSigTransaction` / `MultiSigApproval`
 
-Mirrors the on-chain state of the `MultiSig` contract, which gates privileged/admin calls into the payment processors (signer management, threshold updates, and proposed/approved/executed/canceled admin transactions). These are plain mutable entities, not timeseries — there's no historical windowing here, just current state plus a per-transaction audit trail.
+Mirrors the on-chain state of the `MultiSig` contract, which gates privileged/admin calls into the payment processors (signer management, threshold updates, and proposed/approved/executed/canceled admin transactions). These are plain mutable entities, not timeseries; there's no historical windowing here, just current state plus a per-transaction audit trail.
 
 ```graphql
 type MultiSigWallet @entity(immutable: false) {
@@ -190,9 +190,9 @@ type MultiSigApproval @entity(immutable: false) {
 - **On-chain reconciliation:** on `SignerAdded` / `SignerRemoved` / `TransactionProposed` / `TransactionExecuted`, the mapping calls back into the `MultiSig` contract (`try_getThreshold`, `try_getSignerCount`, `try_getNonce`, `try_getTransaction`) to refresh `MultiSigWallet`/`MultiSigTransaction` fields from live contract state rather than trusting only event params.
 - **Wallet id:** the `MultiSig` contract address itself; a deployment with multiple multisig wallets would have one `MultiSigWallet` row per contract address.
 
-### Oracle — `PaymentToken` registration
+### Oracle: `PaymentToken` registration
 
-The `OracleManager` contract doesn't back a dedicated metric entity. Its `PriceFeedSet` event (emitted when the owner configures or updates a Chainlink price feed for a token) just registers or refreshes the shared `PaymentToken` entity — the same entity keyed by token address that `PaymentVolume`, `EscrowBalance`, and `FeePaid` all reference. If the token has never been seen before (no prior payment created it), this is what first seeds its `name`/`decimal` metadata; if it already exists, the handler is a no-op.
+The `OracleManager` contract doesn't back a dedicated metric entity. Its `PriceFeedSet` event (emitted when the owner configures or updates a Chainlink price feed for a token) just registers or refreshes the shared `PaymentToken` entity, the same entity keyed by token address that `PaymentVolume`, `EscrowBalance`, and `FeePaid` all reference. If the token has never been seen before (no prior payment created it), this is what first seeds its `name`/`decimal` metadata; if it already exists, the handler is a no-op.
 
 All numeric fields are stored as `BigInt` (raw integer units; bignumber-safe). Timestamps are unix seconds.
 
@@ -200,7 +200,7 @@ All numeric fields are stored as `BigInt` (raw integer units; bignumber-safe). T
 
 USD values shown on the dashboard (Total Volume, escrow display, fees) are computed at read time using the **current market value** of each token.
 
-- **Storage:** raw token amounts only — `VolumeStats.dailyVolume`, `EscrowStat.totalBalance` / `EscrowStat.totalAmountPaid`, and `FeePaidStats.totalFeePaid`, each keyed by `PaymentToken`. No USD value is persisted on-chain or in the subgraph.
+- **Storage:** raw token amounts only: `VolumeStats.dailyVolume`, `EscrowStat.totalBalance` / `EscrowStat.totalAmountPaid`, and `FeePaidStats.totalFeePaid`, each keyed by `PaymentToken`. No USD value is persisted on-chain or in the subgraph.
 - **Read path:** fetch the current market price for each held token from a third-party price service, multiply by the stored token amount, and sum across tokens to produce the displayed USD figure.
 - **Caching:** cache the price globally and reuse it across every metric in a render pass. Refresh on whatever cadence the price source justifies.
 - **Frontend rule:** the conversion happens once per render against the cached price; the frontend does not issue a price call per metric.
@@ -221,12 +221,12 @@ Per-token volume recorded in `PaymentVolume` and rolled up daily into `VolumeSta
 
 #### Windowed Volume & Percentage Change
 
-Windowed views and percentage change are computed on the client; the subgraph itself does not persist percentages. The window totals come from the subgraph's **Timeseries and Aggregations** — no third-party block-by-timestamp resolution and no time-travel queries.
+Windowed views and percentage change are computed on the client; the subgraph itself does not persist percentages. The window totals come from the subgraph's **Timeseries and Aggregations**: no third-party block-by-timestamp resolution and no time-travel queries.
 
 Notation (computed per token, then summed in USD on the client):
 
-- `W_curr` — Σ `dailyVolume` over the current 30-day window.
-- `W_prior` — Σ `dailyVolume` over the prior 30-day window (≈60→30 days ago).
+- `W_curr`: Σ `dailyVolume` over the current 30-day window.
+- `W_prior`: Σ `dailyVolume` over the prior 30-day window (≈60→30 days ago).
 
 Derived values:
 
@@ -291,15 +291,15 @@ Tracked **per token** in `EscrowBalance` via two parallel measures, rolled up in
 
 Per-token protocol fees collected, recorded in `FeePaid` and rolled up into `FeePaidStats.totalFeePaid`. The dashboard shows a 30-day window plus a percentage change vs. the prior 30-day window (same windowed pattern as [Total Volume](#windowed-volume--percentage-change)).
 
-- **Storage / Aggregation:** the fee amount is summed **per token** via `(fn: "sum", arg: "amount")` (raw token amount — not a percentage computed in the subgraph).
-- **Source events:** simple — `InvoiceReleased`; advanced — `PaymentReleased` and `DisputeSettled`. Zero-fee events are not recorded.
+- **Storage / Aggregation:** the fee amount is summed **per token** via `(fn: "sum", arg: "amount")` (raw token amount, not a percentage computed in the subgraph).
+- **Source events:** simple: `InvoiceReleased`; advanced: `PaymentReleased` and `DisputeSettled`. Zero-fee events are not recorded.
 - **Display:** the per-token fee totals are converted to USD per the chosen [USD Conversion](#usd-conversion) strategy, then summed.
 
 ### Total Invoices Paid
 
 Cumulative count of invoices paid, surfaced from `VolumeStats.invoicePaid`. The dashboard surfaces this over a **7-day** window (with the prior-7-day comparison following the same windowed pattern as [Total Volume](#windowed-volume--percentage-change)).
 
-- **Formula:** one `PaymentVolume` point per payment; the count is **cumulative** — settlement events do **not** decrement it.
+- **Formula:** one `PaymentVolume` point per payment; the count is **cumulative**; settlement events do **not** decrement it.
 - **Aggregation:** `VolumeStats.invoicePaid` via `(fn: "count", cumulative: true)` over the volume timeseries.
 - **Source events:** invoice `Paid`.
 
@@ -308,7 +308,7 @@ Cumulative count of invoices paid, surfaced from `VolumeStats.invoicePaid`. The 
 Daily transaction count split between the **simple** and **advanced** payment processor contracts, driven by the `InvoiceActivity` timeseries.
 
 - **Timeseries source:** one `InvoiceActivity` record per invoice event, with `invoiceType` (`SIMPLE` / `ADVANCED`, the `InvoiceType` enum) as the grouping dimension, aggregated into `InvoiceActivityStats.totalActivity` with `(fn: "count", cumulative: true)`. The daily `count` bucket yields each day's activity per processor.
-- **Historical days:** the ~7-day chart is a single ranged query over the daily `InvoiceActivityStats` buckets — no block anchors.
+- **Historical days:** the ~7-day chart is a single ranged query over the daily `InvoiceActivityStats` buckets, with no block anchors.
 - **Caching:** closed daily buckets are immutable, so a past day can be cached indefinitely; only the current (open) bucket needs refreshing.
 
 ## Recent Transactions
@@ -323,7 +323,7 @@ A short, ordered list of the most recent transactions across the two processors.
 
 Backed by **user timeseries entities** (`NewUser`, `ActiveUser`) carrying the user (`Bytes`) and their `role` (the `UserRole` enum: `CREATOR` = seller, `PAYER` = buyer); computed views are derived using the same daily-aggregation windows as Total Volume.
 
-- **New Creators / New Payers:** the first time a creator or payer address is seen in the subgraph, a `NewUser` point is emitted (with `role` as a dimension). `NewUserStats` aggregates it with `newUsers: (fn: "count")` per day and `totalUsers: (fn: "count", cumulative: true)`. The dashboard surfaces the count _added in the last 7 days_ (raw count, not percentage) by summing the daily `newUsers` buckets and compares it against the prior 7-day window — no block-by-timestamp anchors.
+- **New Creators / New Payers:** the first time a creator or payer address is seen in the subgraph, a `NewUser` point is emitted (with `role` as a dimension). `NewUserStats` aggregates it with `newUsers: (fn: "count")` per day and `totalUsers: (fn: "count", cumulative: true)`. The dashboard surfaces the count _added in the last 7 days_ (raw count, not percentage) by summing the daily `newUsers` buckets and compares it against the prior 7-day window, with no block-by-timestamp anchors.
 - **Active Users:** count of unique users observed per day. The mapping emits at most one `ActiveUser` point per user per UTC day (deduped via `User.lastActiveDay`), so `ActiveUserStats.activeUsers` (`fn: "count"`) over a day equals the number of unique users active that day. Day-over-day percentage growth is computed from the same daily-aggregation windows as [Total Volume](#windowed-volume--percentage-change).
 
 ## Gas Tracker
@@ -341,7 +341,7 @@ Tracked in the `GasPaid` singleton (`id: "global"`, fields `amount`, `transactio
 
 ## MultiSig (Admin Transactions)
 
-Not a metric in the volume/escrow/fee sense — this surfaces the current governance state of the `MultiSig` contract that gates admin calls into the payment processors (e.g. updating fee rate, hold period, oracle address, or authorized addresses).
+Not a metric in the volume/escrow/fee sense; this surfaces the current governance state of the `MultiSig` contract that gates admin calls into the payment processors (e.g. updating fee rate, hold period, oracle address, or authorized addresses).
 
 - **Signers:** `MultiSigWallet.signerCount` / `MultiSigWallet.threshold` for the at-a-glance "X of Y signers required" display; `MultiSigSigner` (filtered to `active: true`) for the signer list, each with `addedAt` / `removedAt`.
 - **Pending queue:** `MultiSigTransaction` filtered to `status: PROPOSED` or `status: APPROVED`, ordered by `proposedAt`. `approvalCount` vs. `MultiSigWallet.threshold` drives an "N of M approvals" progress indicator.
@@ -350,7 +350,7 @@ Not a metric in the volume/escrow/fee sense — this surfaces the current govern
 
 ## Oracle (Price Feeds)
 
-Also not a dashboard metric — the `OracleManager` contract only feeds the shared `PaymentToken` registry (see [Schemas](#schemas)) via `PriceFeedSet`, so a payment token can exist in the subgraph before it's ever been paid with. There's nothing else here for the dashboard to query directly; live USD pricing still comes from the third-party price service described in [USD Conversion](#usd-conversion), not from the on-chain Chainlink feeds the oracle configures.
+Also not a dashboard metric; the `OracleManager` contract only feeds the shared `PaymentToken` registry (see [Schemas](#schemas)) via `PriceFeedSet`, so a payment token can exist in the subgraph before it's ever been paid with. There's nothing else here for the dashboard to query directly; live USD pricing still comes from the third-party price service described in [USD Conversion](#usd-conversion), not from the on-chain Chainlink feeds the oracle configures.
 
 ## Real-time Updates
 
@@ -361,23 +361,23 @@ The subgraph-derived flow above is poll-based and reflects committed state only.
 
 ### Event → entity mapping
 
-Each entity is derived from the processor events below (used identically by the subgraph mappings and the live websocket). **Token rule** throughout: the **simple** processor is native-only — use `address(0)`; the **advanced** processor uses the payment token carried in the event.
+Each entity is derived from the processor events below (used identically by the subgraph mappings and the live websocket). **Token rule** throughout: the **simple** processor is native-only, so use `address(0)`; the **advanced** processor uses the payment token carried in the event.
 
 - **Volume** (`PaymentVolume` → `VolumeStats.dailyVolume` / `invoicePaid`): on `InvoicePaid` (both processors), push a `PaymentVolume` point using the event `amount`; the cumulative `invoicePaid` count increments by one.
 - **Escrow** (`EscrowBalance.balance` / `.amountPaid` → `EscrowStat.totalBalance` / `.totalAmountPaid`):
   - **Increase** on `InvoicePaid` (both): `balance += amount` and `amountPaid += amount`.
   - **Decrease** (push the negated amount to `balance` only; `amountPaid` is untouched):
-    - Simple — `InvoiceRejected`, `InvoiceReleased`, `InvoiceRefunded`.
-    - Advanced — `DisputeSettled`, `PaymentReleased`, `Refunded`.
-- **Fees** (`FeePaid.amount` → `FeePaidStats.totalFeePaid`): per token (simple has no token in the event — use `address(0)`). Source events — simple `InvoiceReleased`; advanced `PaymentReleased` and `DisputeSettled`.
+    - Simple: `InvoiceRejected`, `InvoiceReleased`, `InvoiceRefunded`.
+    - Advanced: `DisputeSettled`, `PaymentReleased`, `Refunded`.
+- **Fees** (`FeePaid.amount` → `FeePaidStats.totalFeePaid`): per token (simple has no token in the event, so use `address(0)`). Source events: simple `InvoiceReleased`; advanced `PaymentReleased` and `DisputeSettled`.
 - **Invoice activity** (`InvoiceActivity` → `InvoiceActivityStats.totalActivity`): push one point tagged with `invoiceType` (`SIMPLE` / `ADVANCED`) whenever **any non-admin event** fires on a processor.
-- **Users** (`NewUser` / `ActiveUser`): on `InvoiceCreated` take the **seller** (`CREATOR`); on `InvoicePaid` take the **buyer** (`PAYER`) — both processors; on `MetaInvoiceCreated` (advanced) also take the caller (`event.transaction.from`) as an additional **buyer** (`PAYER`) touch, ahead of the underlying sub-invoice payments. Emit a `NewUser` point only when the address is not already present in subgraph data for that role; emit an `ActiveUser` point once per unique user per day.
+- **Users** (`NewUser` / `ActiveUser`): on `InvoiceCreated` take the **seller** (`CREATOR`); on `InvoicePaid` take the **buyer** (`PAYER`), for both processors; on `MetaInvoiceCreated` (advanced) also take the caller (`event.transaction.from`) as an additional **buyer** (`PAYER`) touch, ahead of the underlying sub-invoice payments. Emit a `NewUser` point only when the address is not already present in subgraph data for that role; emit an `ActiveUser` point once per unique user per day.
 - **Gas** (`GasPaid`): read `amount` from the event/transaction details and bump `transactionCount` for **every advanced-processor event except `InvoicePaid`** (payment), updating `lastTimeStamp` each time. Not driven by the invoice metrics above.
 
 ## Notes for Implementation
 
 - Update related metrics inside a single event-handler transaction so the aggregations stay internally consistent.
-- Escrow decreases come from the settlement events listed in [Real-time Updates](#real-time-updates) (simple: `InvoiceRejected` / `InvoiceReleased` / `InvoiceRefunded`; advanced: `DisputeSettled` / `PaymentReleased` / `Refunded`), each pushing a negated `EscrowBalance` point. They do **not** push to `PaymentVolume` or affect `VolumeStats.invoicePaid` — both are cumulative.
-- `LockedPaymentRecovered` (both processors) does **not** currently push an `EscrowBalance` point — recovered funds are not netted out of the tracked escrow balance. Worth confirming with the subgraph team whether that's intentional.
+- Escrow decreases come from the settlement events listed in [Real-time Updates](#real-time-updates) (simple: `InvoiceRejected` / `InvoiceReleased` / `InvoiceRefunded`; advanced: `DisputeSettled` / `PaymentReleased` / `Refunded`), each pushing a negated `EscrowBalance` point. They do **not** push to `PaymentVolume` or affect `VolumeStats.invoicePaid`; both are cumulative.
+- `LockedPaymentRecovered` (both processors) does **not** currently push an `EscrowBalance` point; recovered funds are not netted out of the tracked escrow balance. Worth confirming with the subgraph team whether that's intentional.
 - For windowed/historical reads, query the daily aggregation buckets and sum the relevant windows on the client; closed daily buckets are immutable and safely cacheable, so only the current open bucket needs refreshing.
 - The frontend should never recompute USD values from raw token amounts directly; it consumes whichever USD representation results from the chosen conversion strategy.

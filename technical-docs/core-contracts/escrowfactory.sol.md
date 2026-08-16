@@ -49,7 +49,7 @@ function getPredictedAddress(bytes32 _salt, uint216 _invoiceId) public view retu
 
 #### \_create
 
-Deploys a new Escrow contract deterministically using CREATE2. Internal — called by the inheriting processor contract, not part of the public ABI. Uses a salt derived from the seller, buyer, and invoice ID. The `Escrow` constructor receives only the invoice ID and the payment processor address (`this`); seller and buyer are used solely for salt derivation, not passed as constructor args. For ERC20 payments, `value` is forced to zero and tokens are transferred to the escrow separately.
+Deploys a new Escrow contract deterministically using CREATE2. Internal: called by the inheriting processor contract, not part of the public ABI. Uses a salt derived from the seller, buyer, and invoice ID. The `Escrow` constructor receives only the invoice ID and the payment processor address (`this`); seller and buyer are used solely for salt derivation, not passed as constructor args. For ERC20 payments, `value` is forced to zero and tokens are transferred to the escrow separately.
 
 ```solidity
 function _create(EscrowCreationParams memory _params) internal returns (address escrow);

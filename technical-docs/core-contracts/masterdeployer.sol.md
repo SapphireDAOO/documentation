@@ -1,10 +1,10 @@
 # MasterDeployer.sol
 
-Deploys the full payment processor system — `MultiSig`, `Notes`, `SimplePaymentProcessor`, [PaymentAutomation.sol](paymentautomation.sol.md), `OracleManager`, `IntermediatedPaymentProcessor`, and finally [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md) — deterministically via CREATE2, in a single transaction.
+Deploys the full payment processor system (`MultiSig`, `Notes`, `SimplePaymentProcessor`, [PaymentAutomation.sol](paymentautomation.sol.md), `OracleManager`, `IntermediatedPaymentProcessor`, and finally [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md)) deterministically via CREATE2, in a single transaction.
 
-The key trick: `PaymentProcessorStorage`'s constructor needs to know which processor addresses to authorize, but those processors don't exist until *after* they're deployed — and `PaymentProcessorStorage`'s own address needs to be predictable *before* it's deployed (so the processors can be pointed at it). `MasterDeployer` solves this by implementing `IAuthorizedAddressProvider`: `PaymentProcessorStorage`'s constructor calls back into its deployer (`msg.sender`, i.e. this contract) to fetch the list of addresses to authorize, rather than taking that list as a constructor argument. Keeping the authorized-address list out of the constructor args keeps it out of the CREATE2 init code, so `PaymentProcessorStorage`'s address depends only on its `Configuration` struct (and creation code) and can be predicted (via `predictStorageAddress`) before the processors exist. Authorization is fixed at that one deployment-time callback and can never be changed afterward — there is no setter.
+The key trick: `PaymentProcessorStorage`'s constructor needs to know which processor addresses to authorize, but those processors don't exist until *after* they're deployed, and `PaymentProcessorStorage`'s own address needs to be predictable *before* it's deployed (so the processors can be pointed at it). `MasterDeployer` solves this by implementing `IAuthorizedAddressProvider`: `PaymentProcessorStorage`'s constructor calls back into its deployer (`msg.sender`, i.e. this contract) to fetch the list of addresses to authorize, rather than taking that list as a constructor argument. Keeping the authorized-address list out of the constructor args keeps it out of the CREATE2 init code, so `PaymentProcessorStorage`'s address depends only on its `Configuration` struct (and creation code) and can be predicted (via `predictStorageAddress`) before the processors exist. Authorization is fixed at that one deployment-time callback and can never be changed afterward; there is no setter.
 
-Every child contract's creation code is passed in by the caller (via the `InitCodes` struct) rather than imported and embedded in `MasterDeployer` itself — importing all six contracts directly would push this contract's own bytecode past the EIP-170 size limit. `MasterDeployer` appends the ABI-encoded constructor arguments to each creation code blob itself before calling `Create2.deploy`.
+Every child contract's creation code is passed in by the caller (via the `InitCodes` struct) rather than imported and embedded in `MasterDeployer` itself; importing all six contracts directly would push this contract's own bytecode past the EIP-170 size limit. `MasterDeployer` appends the ABI-encoded constructor arguments to each creation code blob itself before calling `Create2.deploy`.
 
 You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/MasterDeployer.sol), and the interface at [`IMasterDeployer.sol`](https://github.com/SapphireDAOO/payment-processor/blob/main/src/interface/IMasterDeployer.sol).
 
@@ -92,7 +92,7 @@ constructor(address _deployer);
 
 #### authorizedAddresses
 
-Returns the addresses `PaymentProcessorStorage` should authorize at construction. Only returns a non-empty list during the `deployAll` call itself — see `deployAll`.
+Returns the addresses `PaymentProcessorStorage` should authorize at construction. Only returns a non-empty list during the `deployAll` call itself; see `deployAll`.
 
 ```solidity
 function authorizedAddresses() external view returns (address[] memory authorized);
@@ -253,4 +253,4 @@ interface IAuthorizedAddressProvider {
 }
 ```
 
-`PaymentProcessorStorage` calls this on its deployer (`msg.sender`) during construction to fetch the addresses to authorize. Authorization can only be granted this way, at deployment time — see [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md#constructor).
+`PaymentProcessorStorage` calls this on its deployer (`msg.sender`) during construction to fetch the addresses to authorize. Authorization can only be granted this way, at deployment time; see [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md#constructor).

@@ -85,7 +85,7 @@ function createNote(uint216 _invoiceId, address _author, bytes calldata _encrypt
 
 Mark a note as opened for an account.
 
-Only authorized callers can update opened state. Reverts with Unauthorized if the note is not shared — opened state can only be tracked for shared notes.
+Only authorized callers can update opened state. Reverts with Unauthorized if the note is not shared; opened state can only be tracked for shared notes.
 
 ```solidity
 function setOpened(uint216 _invoiceId, address _account, uint256 _noteId) external onlyAuthorized;
@@ -173,7 +173,7 @@ function getNote(uint216 _invoiceId, uint256 _noteId)
 
 Updates the active note encryption version.
 
-Only callable by the owner of `ppStorage` — this checks the storage owner directly, bypassing the `_authorized` allowlist used by `createNote`/`setOpened`. This affects only notes created after the update. Existing notes retain their original version and remain decryptable using the encrypter associated with their stored version.
+Only callable by the owner of `ppStorage`; this checks the storage owner directly, bypassing the `_authorized` allowlist used by `createNote`/`setOpened`. This affects only notes created after the update. Existing notes retain their original version and remain decryptable using the encrypter associated with their stored version.
 
 ```solidity
 function updateVersion(uint8 _newVersion) external;
@@ -189,7 +189,7 @@ function updateVersion(uint8 _newVersion) external;
 
 Updates the authorization status for a user.
 
-Only callable by the owner of `ppStorage` — this checks the storage owner directly, bypassing the `_authorized` allowlist itself (it's what maintains that allowlist).
+Only callable by the owner of `ppStorage`; this checks the storage owner directly, bypassing the `_authorized` allowlist itself (it's what maintains that allowlist).
 
 ```solidity
 function setAuthorized(address _user, bool _enabled) external;

@@ -46,7 +46,7 @@ uint256 public constant EMERGENCY_PAUSE_DURATION = 24 hours
 
 Initializes the contract with the given configuration.
 
-Sets the contract owner, stores the initial configuration parameters, and initializes the invoice nonce counter. Also fetches the addresses to authorize from its deployer: `msg.sender` must implement [`IAuthorizedAddressProvider`](masterdeployer.sol.md#related-interface-iauthorizedaddressprovider) (in practice, [MasterDeployer.sol](masterdeployer.sol.md)), and this contract calls `authorizedAddresses()` on it once, at construction, emitting `AuthorizationUpdated` for each address returned. Keeping this list out of the constructor arguments keeps it out of the CREATE2 init code, so this contract's address is predictable before the authorized processors are deployed. Authorization is fixed here, at deployment, and cannot be changed afterwards — there is no setter.
+Sets the contract owner, stores the initial configuration parameters, and initializes the invoice nonce counter. Also fetches the addresses to authorize from its deployer: `msg.sender` must implement [`IAuthorizedAddressProvider`](masterdeployer.sol.md#related-interface-iauthorizedaddressprovider) (in practice, [MasterDeployer.sol](masterdeployer.sol.md)), and this contract calls `authorizedAddresses()` on it once, at construction, emitting `AuthorizationUpdated` for each address returned. Keeping this list out of the constructor arguments keeps it out of the CREATE2 init code, so this contract's address is predictable before the authorized processors are deployed. Authorization is fixed here, at deployment, and cannot be changed afterwards; there is no setter.
 
 ```solidity
 constructor(Configuration memory _configuration) ;
@@ -116,7 +116,7 @@ function setFeeRate(uint96 _newFeeRate) external onlyOwner;
 
 Updates the gas threshold used in automated task processing.
 
-Only callable by the contract owner. This threshold determines the minimum gas required to continue processing during `SimplePaymentProcessor.processDueTasks` — called either directly or via the `PaymentAutomation` adapter's `onReport` (Chainlink CRE) / `processDueTasks` (Gelato) entrypoints.
+Only callable by the contract owner. This threshold determines the minimum gas required to continue processing during `SimplePaymentProcessor.processDueTasks`, called either directly or via the `PaymentAutomation` adapter's `onReport` (Chainlink CRE) / `processDueTasks` (Gelato) entrypoints.
 
 ```solidity
 function setGasThreshold(uint96 _newGasThreshold) external onlyOwner;

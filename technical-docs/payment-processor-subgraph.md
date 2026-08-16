@@ -14,14 +14,14 @@
 
 This subgraph indexes **six** Sapphire DAO smart contracts deployed on the Base Sepolia testnet:
 
-- **SimplePaymentProcessor** — A native-token (ETH) escrow contract. A seller creates an invoice, the buyer pays in ETH, and the seller accepts (releasing funds after a hold period) or rejects (triggering a refund). Backed by an on-chain min-heap and Chainlink Automation for automated release/refund/retry, with a `LOCKED` fallback state if all automated withdrawal attempts fail.
-- **AdvancedPaymentProcessor** — A multi-token escrow contract with dispute resolution, partial refunds, meta-invoices (batch invoices), and USD-price-pegged payments via an `OracleManager` contract wrapping Chainlink price feeds. Releases and refunds here are always triggered manually by the intermediated platform — there is no automated retry/locked-fund path.
-- **PaymentProcessorStorage** — Shared configuration contract (fee rate, fee receiver, default hold period, intermediated platform address, gas threshold, payment validity duration) and the authorized-address allowlist used by both processors.
-- **Notes** — An encrypted note store attached to invoices. Notes are stored off-chain but their on-chain references and per-user "opened" state are indexed here.
-- **MultiSig** — Multisig governance contract gating privileged admin calls into the processors and storage contract. Its signer set, threshold, proposed/approved/executed/canceled transactions, and approvals are indexed here.
-- **OracleManager** — Emits `PriceFeedSet` when a token gains a Chainlink price feed; the handler registers/refreshes the token's `PaymentToken` metadata.
+- **SimplePaymentProcessor**: A native-token (ETH) escrow contract. A seller creates an invoice, the buyer pays in ETH, and the seller accepts (releasing funds after a hold period) or rejects (triggering a refund). Backed by an on-chain min-heap and Chainlink Automation for automated release/refund/retry, with a `LOCKED` fallback state if all automated withdrawal attempts fail.
+- **AdvancedPaymentProcessor**: A multi-token escrow contract with dispute resolution, partial refunds, meta-invoices (batch invoices), and USD-price-pegged payments via an `OracleManager` contract wrapping Chainlink price feeds. Releases and refunds here are always triggered manually by the intermediated platform; there is no automated retry/locked-fund path.
+- **PaymentProcessorStorage**: Shared configuration contract (fee rate, fee receiver, default hold period, intermediated platform address, gas threshold, payment validity duration) and the authorized-address allowlist used by both processors.
+- **Notes**: An encrypted note store attached to invoices. Notes are stored off-chain but their on-chain references and per-user "opened" state are indexed here.
+- **MultiSig**: Multisig governance contract gating privileged admin calls into the processors and storage contract. Its signer set, threshold, proposed/approved/executed/canceled transactions, and approvals are indexed here.
+- **OracleManager**: Emits `PriceFeedSet` when a token gains a Chainlink price feed; the handler registers/refreshes the token's `PaymentToken` metadata.
 
-The subgraph also maintains a set of **dashboard-metrics** timeseries/aggregation entities (volume, escrow balance, fees, invoice activity, user growth, gas spend) derived from the same events — see [Entity Reference](#3-entity-reference).
+The subgraph also maintains a set of **dashboard-metrics** timeseries/aggregation entities (volume, escrow balance, fees, invoice activity, user growth, gas spend) derived from the same events; see [Entity Reference](#3-entity-reference).
 
 ---
 
@@ -178,7 +178,7 @@ One invoice on the AdvancedPaymentProcessor contract; supports multi-token payme
 | :--- | :--- | :--- |
 | `id` | `ID!` | On-chain invoice ID |
 | `invoiceNonce` | `BigInt!` | Internal invoice nonce |
-| `state` | `AdvancedPaymentProcessorState!` | See [State Machine](#42-intermediated-payment-processor-states) — no `LOCKED` state exists here |
+| `state` | `AdvancedPaymentProcessorState!` | See [State Machine](#42-intermediated-payment-processor-states); no `LOCKED` state exists here |
 | `seller` | `User!` | Invoice seller |
 | `buyer` | `User` | Set once paid |
 | `escrow` | `Bytes` | Escrow contract address |
@@ -215,7 +215,7 @@ A unique wallet address seen by either processor. The `id` is the hex address.
 | Field | Type | Description |
 | :--- | :--- | :--- |
 | `id` | `ID!` | Wallet address (hex string) |
-| `lastActiveDay` | `BigInt` | UTC day index of last observed activity — used to emit at most one `ActiveUser` point per day |
+| `lastActiveDay` | `BigInt` | UTC day index of last observed activity; used to emit at most one `ActiveUser` point per day |
 | `ownedSimpleInvoices` | `[SimplePaymentProcessor!]!` | Seller-side simple invoices |
 | `paidSimpleInvoices` | `[SimplePaymentProcessor!]!` | Buyer-side simple invoices |
 | `issuedAdvancedInvoices` | `[AdvancedPaymentProcessor!]!` | Seller-side advanced invoices |
@@ -240,7 +240,7 @@ Metadata for a token registered either via a payment or via `OracleManager.Price
 
 #### `MultiSigWallet` / `MultiSigSigner` / `MultiSigTransaction` / `MultiSigApproval`
 
-See [core-contracts/multisig.sol.md](core-contracts/multisig.sol.md) for the full field reference — summary:
+See [core-contracts/multisig.sol.md](core-contracts/multisig.sol.md) for the full field reference; summary:
 
 - `MultiSigWallet` (`id`: contract address): `threshold`, `signerCount`, `transactionCount`, derived `signers`/`transactions`.
 - `MultiSigSigner` (`id`: `{wallet}-{signer}`): `wallet`, `address`, `active`, `addedAt`, `removedAt`.
@@ -249,7 +249,7 @@ See [core-contracts/multisig.sol.md](core-contracts/multisig.sol.md) for the ful
 
 #### `StorageConfiguration` / `AuthorizedAddress`
 
-`StorageConfiguration` (singleton, `id: "global"`): mirrors `PaymentProcessorStorage`'s current config — `owner`, `feeRate`, `feeReceiver`, `defaultHoldPeriod`, `marketplace`, `gasThreshold`, `paymentValidityDuration`, `updatedAt`, `updatedAtBlock`.
+`StorageConfiguration` (singleton, `id: "global"`): mirrors `PaymentProcessorStorage`'s current config: `owner`, `feeRate`, `feeReceiver`, `defaultHoldPeriod`, `marketplace`, `gasThreshold`, `paymentValidityDuration`, `updatedAt`, `updatedAtBlock`.
 
 `AuthorizedAddress` (`id`: account address): `account` (`Bytes!`), `authorized` (`Boolean!`), `updatedAt`/`updatedAtBlock`.
 
@@ -296,16 +296,16 @@ All timestamps are Unix seconds stored as `BigInt`.
 | `DISPUTE_DISMISSED` | Dispute dismissed; invoice becomes releasable again |
 | `DISPUTE_RESOLVED` | Dispute resolved in the seller's favor; becomes releasable |
 | `DISPUTE_SETTLED` | Funds split between buyer and seller; terminal |
-| `REFUNDED` | Only reached on a **full** refund (`_refundShare == 10000` bps) — partial refunds stay `PAID` |
+| `REFUNDED` | Only reached on a **full** refund (`_refundShare == 10000` bps); partial refunds stay `PAID` |
 | `RELEASED` | Funds released to seller |
 
-There is no `LOCKED` state on this contract — releases and refunds are always triggered manually by the intermediated platform, with no automated retry path.
+There is no `LOCKED` state on this contract; releases and refunds are always triggered manually by the intermediated platform, with no automated retry path.
 
 ---
 
 ### 5. Example Queries
 
-Confirm the current deployment's query endpoint in `payment-processor-subgraph/subgraph.yaml` / your Graph Studio dashboard before using these — the URL is environment-specific and not reproduced here.
+Confirm the current deployment's query endpoint in `payment-processor-subgraph/subgraph.yaml` / your Graph Studio dashboard before using these; the URL is environment-specific and not reproduced here.
 
 #### Fetch recent simple invoices with their event log
 
@@ -459,4 +459,4 @@ Confirm the current deployment's query endpoint in `payment-processor-subgraph/s
 
 #### Time-travel: volume 30 days ago
 
-Not applicable — historical windows are served by the subgraph's native **Timeseries and Aggregations** (`VolumeStats`, `EscrowStat`, etc.), not block-by-timestamp lookups. See [`metric.md`](../metric.md#windowed-volume--percentage-change) for the exact query pattern.
+Not applicable: historical windows are served by the subgraph's native **Timeseries and Aggregations** (`VolumeStats`, `EscrowStat`, etc.), not block-by-timestamp lookups. See [`metric.md`](../metric.md#windowed-volume--percentage-change) for the exact query pattern.

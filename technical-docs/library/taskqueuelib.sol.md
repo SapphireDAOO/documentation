@@ -4,7 +4,7 @@ TaskQueueLib is a small scheduling helper that keeps track of “what should hap
 
 When a new task needs to be scheduled, it is inserted with its due time. If the due time changes, the task can be rescheduled, and the heap reorders itself so the next upcoming task is still on top. Tasks can also be removed directly, which is useful if an invoice is canceled or no longer needs an automated action.
 
-To run scheduled actions, the library checks whether the next task is due “now” and, if it is, it processes tasks in order. It does this carefully with a gas/limit safeguard so it does not try to process too many tasks at once. For each task, it calls back into the payment processor’s release logic and uses a simple status code to decide what happens next: a successful release moves on to the next task, while both an ineligible or errored task are treated the same way — removed as a stale entry so the queue can keep moving.
+To run scheduled actions, the library checks whether the next task is due “now” and, if it is, it processes tasks in order. It does this carefully with a gas/limit safeguard so it does not try to process too many tasks at once. For each task, it calls back into the payment processor’s release logic and uses a simple status code to decide what happens next: a successful release moves on to the next task, while both an ineligible or errored task are treated the same way: removed as a stale entry so the queue can keep moving.
 
 Keys are encoded into `uint256` with `dueTime` in the high 40 bits and `id` in the low 216 bits.
 
@@ -14,7 +14,7 @@ You can find the full implementation [here](https://github.com/SapphireDAOO/paym
 
 #### NOT\_ELIGIBLE\_FOR\_RELEASE
 
-Returned when a task is not yet eligible for release (e.g. wrong status or too early). Reserved for callback implementations — `SimplePaymentProcessor`'s current `_release` callback never returns this value, only `SUCCESSFUL` or `ERROR`.
+Returned when a task is not yet eligible for release (e.g. wrong status or too early). Reserved for callback implementations; `SimplePaymentProcessor`'s current `_release` callback never returns this value, only `SUCCESSFUL` or `ERROR`.
 
 ```solidity
 uint256 constant NOT_ELIGIBLE_FOR_RELEASE = 1
@@ -98,11 +98,11 @@ function reschedule(Heap storage _heap, uint216 _id, uint40 _newDueAt, mapping(u
 
 Iterates through the heap and attempts to release due tasks based on available gas.
 
-Peeks at the heap root on each iteration. If the top task is not yet due (`block.timestamp < dueAt`), the loop exits immediately — the min-heap ordering guarantees all remaining tasks are also not yet due. Otherwise `_callback` is invoked with the task ID, and the returned status code decides control flow:
+Peeks at the heap root on each iteration. If the top task is not yet due (`block.timestamp < dueAt`), the loop exits immediately; the min-heap ordering guarantees all remaining tasks are also not yet due. Otherwise `_callback` is invoked with the task ID, and the returned status code decides control flow:
 
 * `SUCCESSFUL`: Task released and removed from heap; continues to the next task.
-* `NOT_ELIGIBLE_FOR_RELEASE`: Stale entry — removed from the heap (via `_index`) and the loop continues.
-* `ERROR`: Stale entry — also removed from the heap and the loop continues (it does **not** abort the loop).
+* `NOT_ELIGIBLE_FOR_RELEASE`: Stale entry; removed from the heap (via `_index`) and the loop continues.
+* `ERROR`: Stale entry; also removed from the heap and the loop continues (it does **not** abort the loop).
 
 ```solidity
 function processDueTask(
