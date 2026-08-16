@@ -26,6 +26,6 @@ Notes show in the Notes section on each invoice. Shared notes can be opened and 
 
 ### Best practices
 
-* Keep notes short and specific (e.g., delivery details or references).
+* Keep notes short and specific (e.g., references).
 * Avoid sensitive information (secrets, passwords, or private data).
 * Use notes to clarify context, not to negotiate terms.

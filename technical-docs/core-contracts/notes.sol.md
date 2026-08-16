@@ -4,18 +4,18 @@ The `Notes.sol` Solidity contract stores encrypted order notes and tracks per-us
 
 Notes.sol enables:
 
-* Encrypted, append-only notes per order
-* Optional sharing for non-authors
-* Per-user opened state tracking
-* Allowlist-based write access controlled by the storage owner
+- Encrypted, append-only notes per order
+- Optional sharing for non-authors
+- Per-user opened state tracking
+- Allowlist-based write access controlled by the storage owner
 
 Contract Address: [0xbe210c16e990e74a92eb85060bb33eb03418c565](https://sepolia.etherscan.io/address/0xbe210c16e990e74a92eb85060bb33eb03418c565)
 
-You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/v2/src/Notes.sol)
+You can find the full code implementation [here](http://github.com/SapphireDAOO/payment-processor/blob/main/src/Notes.sol)
 
 ### State Variables
 
-#### NOT\_ALLOWED
+#### NOT_ALLOWED
 
 Authorization flag indicating access is denied.
 
@@ -51,7 +51,7 @@ constructor(address _paymentProcessorStorageAddress) ;
 
 **Parameters**
 
-|                Name               |    Type   |              Description             |
+|               Name                |   Type    |             Description              |
 | :-------------------------------: | :-------: | :----------------------------------: |
 | `_paymentProcessorStorageAddress` | `address` | The address of the storage contract. |
 
@@ -68,16 +68,16 @@ function createNote(uint216 _invoiceId, address _author, bytes calldata _encrypt
 
 **Parameters**
 
-|         Name        |    Type   |                  Description                 |
+|        Name         |   Type    |                 Description                  |
 | :-----------------: | :-------: | :------------------------------------------: |
-|     `_invoiceId`    | `uint216` |              Invoice identifier.             |
+|    `_invoiceId`     | `uint216` |             Invoice identifier.              |
 |      `_author`      | `address` |                 Note author.                 |
-| `_encryptedContent` |  `bytes`  |            Encrypted note payload.           |
-|       `_share`      |   `bool`  | Whether the note is shared with non-authors. |
+| `_encryptedContent` |  `bytes`  |           Encrypted note payload.            |
+|      `_share`       |  `bool`   | Whether the note is shared with non-authors. |
 
 **Returns**
 
-|   Name   |    Type   |       Description      |
+|   Name   |   Type    |      Description       |
 | :------: | :-------: | :--------------------: |
 | `noteId` | `uint256` | Newly created note id. |
 
@@ -93,11 +93,11 @@ function setOpened(uint216 _invoiceId, address _account, uint256 _noteId) extern
 
 **Parameters**
 
-|     Name     |    Type   |                   Description                   |
-| :----------: | :-------: | :---------------------------------------------: |
-| `_invoiceId` | `uint216` | Invoice identifier.                             |
-| `_account`   | `address` | Account whose opened state is updated.          |
-|   `_noteId`  | `uint256` | Note identifier.                                |
+|     Name     |   Type    |              Description               |
+| :----------: | :-------: | :------------------------------------: |
+| `_invoiceId` | `uint216` |          Invoice identifier.           |
+|  `_account`  | `address` | Account whose opened state is updated. |
+|  `_noteId`   | `uint256` |            Note identifier.            |
 
 #### getNoteCount
 
@@ -109,13 +109,13 @@ function getNoteCount(uint216 _invoiceId) external view returns (uint256 totalNo
 
 **Parameters**
 
-|     Name     |    Type   |     Description      |
-| :----------: | :-------: | :---------------------: |
+|     Name     |   Type    |     Description     |
+| :----------: | :-------: | :-----------------: |
 | `_invoiceId` | `uint216` | Invoice identifier. |
 
 **Returns**
 
-|     Name     |    Type   |                  Description                 |
+|     Name     |   Type    |                 Description                  |
 | :----------: | :-------: | :------------------------------------------: |
 | `totalNotes` | `uint256` | Total number of notes created for the order. |
 
@@ -129,15 +129,15 @@ function isOpened(uint216 _invoiceId, uint256 _noteId, address _user) external v
 
 **Parameters**
 
-|     Name     |    Type   |     Description      |
-| :----------: | :-------: | :---------------------: |
+|     Name     |   Type    |     Description     |
+| :----------: | :-------: | :-----------------: |
 | `_invoiceId` | `uint216` | Invoice identifier. |
-|   `_noteId`  | `uint256` |  Note identifier. |
-|    `_user`   | `address` | Address to check. |
+|  `_noteId`   | `uint256` |  Note identifier.   |
+|   `_user`    | `address` |  Address to check.  |
 
 **Returns**
 
-|   Name   |  Type  |                Description               |
+|   Name   |  Type  |               Description                |
 | :------: | :----: | :--------------------------------------: |
 | `isOpen` | `bool` | True if the note is opened for the user. |
 
@@ -154,20 +154,20 @@ function getNote(uint216 _invoiceId, uint256 _noteId)
 
 **Parameters**
 
-|     Name     |    Type   |     Description      |
-| :----------: | :-------: | :---------------------: |
+|     Name     |   Type    |     Description     |
+| :----------: | :-------: | :-----------------: |
 | `_invoiceId` | `uint216` | Invoice identifier. |
-|   `_noteId`  | `uint256` |  Note identifier. |
+|  `_noteId`   | `uint256` |  Note identifier.   |
 
 **Returns**
 
-|      Name      |    Type   |               Description               |
+|      Name      |   Type    |               Description               |
 | :------------: | :-------: | :-------------------------------------: |
-|    `author`    | `address` |               Note author.              |
-|     `share`    |   `bool`  |       Whether the note is shared.       |
-|    `content`   |  `bytes`  |         Encrypted note content.         |
-| `openedStatus` |   `bool`  | Whether the caller has opened the note. |
-|    `version`   |  `uint8`  |            Note schema version.         |
+|    `author`    | `address` |              Note author.               |
+|    `share`     |  `bool`   |       Whether the note is shared.       |
+|   `content`    |  `bytes`  |         Encrypted note content.         |
+| `openedStatus` |  `bool`   | Whether the caller has opened the note. |
+|   `version`    |  `uint8`  |          Note schema version.           |
 
 #### updateVersion
 
@@ -181,7 +181,7 @@ function updateVersion(uint8 _newVersion) external;
 
 **Parameters**
 
-|      Name     |   Type  |                     Description                    |
+|     Name      |  Type   |                    Description                     |
 | :-----------: | :-----: | :------------------------------------------------: |
 | `_newVersion` | `uint8` | The new note encryption version identifier to use. |
 
@@ -197,10 +197,10 @@ function setAuthorized(address _user, bool _enabled) external;
 
 **Parameters**
 
-|    Name    |    Type   |               Description              |
+|    Name    |   Type    |              Description               |
 | :--------: | :-------: | :------------------------------------: |
-|   `_user`  | `address` |         The address to update.         |
-| `_enabled` |   `bool`  | Whether the user should be authorized. |
+|  `_user`   | `address` |         The address to update.         |
+| `_enabled` |  `bool`   | Whether the user should be authorized. |
 
 #### getCurrentVersion
 
@@ -212,9 +212,9 @@ function getCurrentVersion() external view returns (uint8 v);
 
 **Returns**
 
-| Name |  Type  |          Description          |
-| :--: | :----: | :-------------------------------: |
-| `v` | `uint8` | The current note version. |
+| Name |  Type   |        Description        |
+| :--: | :-----: | :-----------------------: |
+| `v`  | `uint8` | The current note version. |
 
 ### Structs
 
@@ -232,13 +232,13 @@ struct Note {
 }
 ```
 
-| Field     | Type      | Description                                      |
-| :--------: | :-------: | :-----------------------------------------------: |
-| `author`  | `address` | The note author.                                 |
-| `share`   | `bool`    | Whether the note is shared with the other party. |
-| `exists`  | `bool`    | Whether the note exists.                         |
-| `version` | `uint8`   | The note schema version.                         |
-| `content` | `bytes`   | The encrypted note content.                      |
+|   Field   |   Type    |                   Description                    |
+| :-------: | :-------: | :----------------------------------------------: |
+| `author`  | `address` |                 The note author.                 |
+|  `share`  |  `bool`   | Whether the note is shared with the other party. |
+| `exists`  |  `bool`   |             Whether the note exists.             |
+| `version` |  `uint8`  |             The note schema version.             |
+| `content` |  `bytes`  |           The encrypted note content.            |
 
 ### Events
 
@@ -250,13 +250,13 @@ Emitted when a new note is created for an invoice.
 event NoteCreated(uint216 indexed invoiceId, uint256 indexed noteId, address indexed author, bool share, bytes encryptedContent);
 ```
 
-| Name               | Type      | Description                                                   |
-| :-----------------: | :-------: | :------------------------------------------------------------: |
-| `invoiceId`        | `uint216` | The unique identifier of the invoice the note is associated with. |
-| `noteId`           | `uint256` | The unique identifier of the created note.                    |
-| `author`           | `address` | The address of the account that created the note.             |
-| `share`            | `bool`    | Indicates whether the note is shared with other parties.      |
-| `encryptedContent` | `bytes`   | The encrypted contents of the note.                           |
+|        Name        |   Type    |                            Description                            |
+| :----------------: | :-------: | :---------------------------------------------------------------: |
+|    `invoiceId`     | `uint216` | The unique identifier of the invoice the note is associated with. |
+|      `noteId`      | `uint256` |            The unique identifier of the created note.             |
+|      `author`      | `address` |         The address of the account that created the note.         |
+|      `share`       |  `bool`   |     Indicates whether the note is shared with other parties.      |
+| `encryptedContent` |  `bytes`  |                The encrypted contents of the note.                |
 
 #### NoteStateChanged
 
@@ -266,17 +266,17 @@ Emitted when a user changes their opened state for a note.
 event NoteStateChanged(uint216 indexed invoiceId, uint256 indexed noteId, address indexed user, bool opened);
 ```
 
-| Name        | Type      | Description                                                       |
-| :----------: | :-------: | :----------------------------------------------------------------: |
-| `invoiceId` | `uint216` | The unique identifier of the invoice the note belongs to.         |
-| `noteId`    | `uint256` | The unique identifier of the note.                                |
-| `user`      | `address` | The address of the user whose note state was updated.             |
-| `opened`    | `bool`    | Whether the note is marked as opened or not by the user.          |
+|    Name     |   Type    |                        Description                        |
+| :---------: | :-------: | :-------------------------------------------------------: |
+| `invoiceId` | `uint216` | The unique identifier of the invoice the note belongs to. |
+|  `noteId`   | `uint256` |            The unique identifier of the note.             |
+|   `user`    | `address` |   The address of the user whose note state was updated.   |
+|  `opened`   |  `bool`   | Whether the note is marked as opened or not by the user.  |
 
 ### Errors
 
-| Error | Description |
-| :----: | :----------: |
+|      Error       |                         Description                          |
+| :--------------: | :----------------------------------------------------------: |
 | `Unauthorized()` | Thrown when the caller is not authorized to access the note. |
-| `EmptyContent()` | Thrown when creating a note with empty content. |
-| `NoteNotFound()` | Thrown when the requested note does not exist. |
+| `EmptyContent()` |       Thrown when creating a note with empty content.        |
+| `NoteNotFound()` |        Thrown when the requested note does not exist.        |

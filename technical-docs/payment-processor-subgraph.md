@@ -16,7 +16,7 @@ This subgraph indexes **six** Sapphire DAO smart contracts deployed on the Base 
 
 - **SimplePaymentProcessor**: A native-token (ETH) escrow contract. A seller creates an invoice, the buyer pays in ETH, and the seller accepts (releasing funds after a hold period) or rejects (triggering a refund). Backed by an on-chain min-heap and Chainlink Automation for automated release/refund/retry, with a `LOCKED` fallback state if all automated withdrawal attempts fail.
 - **AdvancedPaymentProcessor**: A multi-token escrow contract with dispute resolution, partial refunds, meta-invoices (batch invoices), and USD-price-pegged payments via an `OracleManager` contract wrapping Chainlink price feeds. Releases and refunds here are always triggered manually by the intermediated platform; there is no automated retry/locked-fund path.
-- **PaymentProcessorStorage**: Shared configuration contract (fee rate, fee receiver, default hold period, intermediated platform address, gas threshold, payment validity duration) and the authorized-address allowlist used by both processors.
+- **PaymentProcessorStorage**: Shared configuration contract (fee rate, fee receiver, intermediated platform address, gas threshold, payment validity duration) and the authorized-address allowlist used by both processors.
 - **Notes**: An encrypted note store attached to invoices. Notes are stored off-chain but their on-chain references and per-user "opened" state are indexed here.
 - **MultiSig**: Multisig governance contract gating privileged admin calls into the processors and storage contract. Its signer set, threshold, proposed/approved/executed/canceled transactions, and approvals are indexed here.
 - **OracleManager**: Emits `PriceFeedSet` when a token gains a Chainlink price feed; the handler registers/refreshes the token's `PaymentToken` metadata.
@@ -39,7 +39,7 @@ Addresses and start blocks below reflect the current `subgraph.yaml` on the `bas
 | :--- | :--- | :--- |
 | `InvoiceCreated(invoiceId, invoice)` | `handleInvoiceCreated` | Creates the `SimplePaymentProcessor` entity, tracks the seller as a `CREATOR` user, writes an `InvoiceEvent` |
 | `InvoicePaid(invoiceId, buyer, amountPaid, expiresAt)` | `handleInvoicePaid` | Records buyer and amount; tracks the buyer as a `PAYER` user; pushes `PaymentVolume` and a positive `EscrowBalance` delta |
-| `InvoiceAccepted(invoiceId)` | `handleInvoiceAccepted` | Sets `state = ACCEPTED` and, if not already set, `releaseAt` from the default hold period |
+| `InvoiceAccepted(invoiceId)` | `handleInvoiceAccepted` | Sets `state = ACCEPTED` and, if not already set, `releaseAt` from the invoice's stored hold period |
 | `InvoiceCanceled(invoiceId)` | `handleInvoiceCanceled` | Marks the invoice `CANCELED` |
 | `InvoiceRejected(invoiceId, amount)` | `handleInvoiceRejected` | Marks the invoice `REJECTED`; pushes a negative `EscrowBalance` delta |
 | `InvoiceRefunded(invoiceId, amount)` | `handleInvoiceRefunded` | Marks the invoice `REFUNDED`; pushes a negative `EscrowBalance` delta |
@@ -87,11 +87,10 @@ Every handler above except `InvoicePaid` also bumps the `GasPaid` singleton; eve
 | :--- | :--- | :--- |
 | `AuthorizationUpdated(account, authorized)` | `handleAuthorizationUpdated` | Upserts an `AuthorizedAddress` entity |
 | `ConfigurationInitialized(config)` | `handleConfigurationInitialized` | Seeds the `StorageConfiguration` singleton from the full config struct |
-| `DefaultHoldPeriodUpdated(defaultHoldPeriod)` | `handleDefaultHoldPeriodUpdated` | Updates the singleton's `defaultHoldPeriod` |
 | `FeeRateUpdated(feeRate)` | `handleFeeRateUpdated` | Updates the singleton's `feeRate` |
 | `FeeReceiverUpdated(feeReceiver)` | `handleFeeReceiverUpdated` | Updates the singleton's `feeReceiver` |
 | `GasThresholdUpdated(gasThreshold)` | `handleGasThresholdUpdated` | Updates the singleton's `gasThreshold` |
-| `MarketplaceUpdated(marketplace)` | `handleMarketplaceUpdated` | Updates the singleton's `marketplace` |
+| `IntermediatedPlatformsOperatorUpdated(intermediatedPlatformsOperator)` | `handleIntermediatedPlatformsOperatorUpdated` | Updates the singleton's `intermediatedPlatformsOperator` |
 | `OwnershipTransferred(previousOwner, newOwner)` | `handleOwnershipTransferred` | Updates the singleton's `owner` |
 | `PaymentValidityDurationUpdated(validityDuration)` | `handlePaymentValidityDurationUpdated` | Updates the singleton's `paymentValidityDuration` |
 
@@ -249,7 +248,7 @@ See [core-contracts/multisig.sol.md](core-contracts/multisig.sol.md) for the ful
 
 #### `StorageConfiguration` / `AuthorizedAddress`
 
-`StorageConfiguration` (singleton, `id: "global"`): mirrors `PaymentProcessorStorage`'s current config: `owner`, `feeRate`, `feeReceiver`, `defaultHoldPeriod`, `marketplace`, `gasThreshold`, `paymentValidityDuration`, `updatedAt`, `updatedAtBlock`.
+`StorageConfiguration` (singleton, `id: "global"`): mirrors `PaymentProcessorStorage`'s current config: `owner`, `feeRate`, `feeReceiver`, `intermediatedPlatformsOperator`, `gasThreshold`, `paymentValidityDuration`, `updatedAt`, `updatedAtBlock`.
 
 `AuthorizedAddress` (`id`: account address): `account` (`Bytes!`), `authorized` (`Boolean!`), `updatedAt`/`updatedAtBlock`.
 

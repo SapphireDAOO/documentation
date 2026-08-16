@@ -1,7 +1,5 @@
 # SimplePaymentProcessor.sol
 
-
-
 The payment processor Solidity smart contract is the main user interface contract. Most users will interact with the SapphireDao platform via the `SimplePaymentProcessor.sol` contract. It shows invoice creation, management, payments, and escrow functionality on the blockchain.
 
 Contract Address: [0xd4a9e5ac9f54beccd7c12ca6bd7bd026bbf0058d](https://sepolia.etherscan.io/address/0xd4a9e5ac9f54beccd7c12ca6bd7bd026bbf0058d)
@@ -14,12 +12,12 @@ Every value-moving entrypoint (everything except `cancelInvoice`, which moves no
 
 `PaymentProcessor.sol` grants users access to
 
-* Create invoice
-* Payment of invoice
-* Accept payment
-* Reject payment
-* Release invoice
-* Invoice status
+- Create invoice
+- Payment of invoice
+- Accept payment
+- Reject payment
+- Release invoice
+- Invoice status
 
 ### State Variables
 
@@ -89,7 +87,7 @@ Invoice's escrowed funds were burned to `address(0)` after all automated withdra
 uint8 constant BURNED = 8;
 ```
 
-#### BASIS\_POINTS
+#### BASIS_POINTS
 
 Basis points denominator used for percentage calculations (1% = 100).
 
@@ -97,7 +95,7 @@ Basis points denominator used for percentage calculations (1% = 100).
 uint256 constant BASIS_POINTS = 10_000;
 ```
 
-#### SELLER\_DEFAULT\_DECISION\_WINDOW
+#### SELLER_DEFAULT_DECISION_WINDOW
 
 Default decision period for the seller after an invoice is paid.
 
@@ -105,7 +103,7 @@ Default decision period for the seller after an invoice is paid.
 uint256 constant SELLER_DEFAULT_DECISION_WINDOW = 6 hours;
 ```
 
-#### MAX\_WITHDRAWAL\_RETRIES
+#### MAX_WITHDRAWAL_RETRIES
 
 Maximum number of automated withdrawal retry attempts before the escrowed funds are burned (see [refundBuyer](#refundbuyer)).
 
@@ -121,15 +119,13 @@ Reference to the external Payment Processor storage contract.
 IPaymentProcessorStorage public immutable ppStorage
 ```
 
-`decisionWindow` is a private state variable (previously `public`); read it via [getDecisionWindow](#getdecisionwindow) instead of a direct getter.
-
 ### Functions
 
 #### constructor
 
 Initializes the payment processor with its storage and notes contract references.
 
-Sets `ppStorage` and `notes`, initializes `decisionWindow` to `SELLER_DEFAULT_DECISION_WINDOW`, and assigns `minimumInvoiceValue` directly. Fee rate, fee receiver, and the default escrow hold period all live in `ppStorage`, not here.
+Sets `ppStorage` and `notes`, initializes `decisionWindow` to `SELLER_DEFAULT_DECISION_WINDOW`, and assigns `minimumInvoiceValue` directly. Fee rate and fee receiver live in `ppStorage`, not here.
 
 The minimum invoice value is assigned directly rather than via `setMinimumInvoiceValue`: this contract is deployed (via `MasterDeployer`) against a predicted storage address before `PaymentProcessorStorage` actually exists, so the setter's `onlyAuthorized` check, which calls into `ppStorage`, would revert at construction time.
 
@@ -139,17 +135,15 @@ constructor(address _paymentProcessorStorageAddress, uint256 _minimumInvoicePric
 
 **Parameters**
 
-|                Name               |    Type   |                          Description                          |
+|               Name                |   Type    |                          Description                          |
 | :-------------------------------: | :-------: | :-----------------------------------------------------------: |
 | `_paymentProcessorStorageAddress` | `address` | The address of the shared payment processor storage contract. |
-|       `_minimumInvoicePrice`      | `uint256` |     The new minimum default invoice value to set (in wei).    |
+|      `_minimumInvoicePrice`       | `uint256` |    The new minimum default invoice value to set (in wei).     |
 |          `_notesAddress`          | `address` |     Address of the notes contract used for invoice notes.     |
 
 #### createInvoice
 
 Creates a new invoice with a specified price and escrow hold period.
-
-Optionally stores a reference to the user's off-chain notes file. The hold period is fixed here and cannot be changed afterwards, including by the owner; there is no equivalent to the old `setInvoiceReleaseTime` override anymore. Pass `0` to make funds releasable immediately on acceptance.
 
 ```solidity
 function createInvoice(uint256 _price, uint32 _holdPeriod, bytes memory _storageRef, bool _share)
@@ -160,16 +154,16 @@ function createInvoice(uint256 _price, uint32 _holdPeriod, bytes memory _storage
 
 **Parameters**
 
-|      Name     |    Type   |                       Description                      |
-| :-----------: | :-------: | :----------------------------------------------------: |
-| `_price`      | `uint256` |            The price of the invoice in wei.            |
+|     Name      |   Type    |                                                     Description                                                      |
+| :-----------: | :-------: | :------------------------------------------------------------------------------------------------------------------: |
+|   `_price`    | `uint256` |                                           The price of the invoice in wei.                                           |
 | `_holdPeriod` | `uint32`  | How long (in seconds) funds stay in escrow after the seller accepts payment. `0` releases immediately on acceptance. |
-|  `_storageRef`  |  `bytes`  | A bytes-encoded reference to the user's notes storage. |
-|     `_share`    |   `bool`  |      Whether the note is shared with non-authors.      |
+| `_storageRef` |  `bytes`  |                                A bytes-encoded reference to the user's notes storage.                                |
+|   `_share`    |  `bool`   |                                     Whether the note is shared with non-authors.                                     |
 
 **Returns**
 
-|     Name    |    Type   |                 Description                 |
+|    Name     |   Type    |                 Description                 |
 | :---------: | :-------: | :-----------------------------------------: |
 | `invoiceId` | `uint216` | The unique ID of the newly created invoice. |
 
@@ -189,23 +183,23 @@ function pay(uint216 _invoiceId, bytes memory _storageRef, bool _share)
 
 **Parameters**
 
-|      Name     |    Type   |                        Description                       |
+|     Name      |   Type    |                       Description                        |
 | :-----------: | :-------: | :------------------------------------------------------: |
-|  `_invoiceId` | `uint216` |             The ID of the invoice being paid.            |
+| `_invoiceId`  | `uint216` |            The ID of the invoice being paid.             |
 | `_storageRef` |  `bytes`  | A bytes-encoded reference to the caller's notes storage. |
-|    `_share`   |   `bool`  |       Whether the note is shared with non-authors.       |
+|   `_share`    |  `bool`   |       Whether the note is shared with non-authors.       |
 
 **Returns**
 
-|      Name       |    Type   |                             Description                             |
-| :---------------: | :-------: | :-----------------------------------------------------------------: |
-| `escrowAddress`  | `address` | The address of the escrow contract created for this payment. |
+|      Name       |   Type    |                         Description                          |
+| :-------------: | :-------: | :----------------------------------------------------------: |
+| `escrowAddress` | `address` | The address of the escrow contract created for this payment. |
 
 #### acceptPayment
 
 Marks the specified invoice as accepted.
 
-This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event. Only callable by the invoice's seller, and only while the invoice is `PAID` and within the acceptance window (`expiresAt`); reverts with `AcceptanceWindowExceeded` once that window has passed. `releaseAt` is set to `block.timestamp + holdPeriod`, using the hold period fixed on the invoice at creation, and the heap entry is rescheduled accordingly.
+This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event. Only callable by the invoice's seller, and only while the invoice is `PAID` and within the acceptance window; reverts with `AcceptanceWindowExceeded` once that window has passed. `releaseAt` is set to `block.timestamp + holdPeriod`, using the hold period fixed on the invoice at creation, and the heap entry is rescheduled accordingly.
 
 ```solidity
 function acceptPayment(uint216 _invoiceId) public whenNotPaused;
@@ -213,7 +207,7 @@ function acceptPayment(uint216 _invoiceId) public whenNotPaused;
 
 **Parameters**
 
-|     Name     |    Type   |               Description              |
+|     Name     |   Type    |              Description               |
 | :----------: | :-------: | :------------------------------------: |
 | `_invoiceId` | `uint216` | The key of the invoice being accepted. |
 
@@ -229,7 +223,7 @@ function rejectPayment(uint216 _invoiceId) public whenNotPaused;
 
 **Parameters**
 
-|     Name     |    Type   |                        Description                        |
+|     Name     |   Type    |                        Description                        |
 | :----------: | :-------: | :-------------------------------------------------------: |
 | `_invoiceId` | `uint216` | The key of the invoice being rejected. address and payer. |
 
@@ -245,7 +239,7 @@ function cancelInvoice(uint216 _invoiceId) external;
 
 **Parameters**
 
-|     Name     |    Type   |            Description           |
+|     Name     |   Type    |           Description            |
 | :----------: | :-------: | :------------------------------: |
 | `_invoiceId` | `uint216` | The ID of the invoice to cancel. |
 
@@ -261,7 +255,7 @@ function release(uint216 _invoiceId) public whenNotPaused;
 
 **Parameters**
 
-|     Name     |    Type   |                     Description                     |
+|     Name     |   Type    |                     Description                     |
 | :----------: | :-------: | :-------------------------------------------------: |
 | `_invoiceId` | `uint216` | The ID of the invoice for which funds are released. |
 
@@ -269,7 +263,7 @@ function release(uint216 _invoiceId) public whenNotPaused;
 
 Refunds the buyer of a specific invoice when the seller fails to act in time.
 
-Invoice must be in `PAID` state and the decision window (`expiresAt`) must have elapsed, otherwise reverts with `InvoiceNotEligibleForRefund`. Attempts to withdraw the price to the buyer; on success the invoice transitions to `REFUNDED`, is removed from the heap, and its balance is zeroed. On withdrawal failure, the retry counter is incremented and the invoice stays `PAID` for a future retry; once retries would exceed `MAX_WITHDRAWAL_RETRIES`, the escrowed funds are instead burned to `address(0)` and the invoice transitions to `BURNED`. This is terminal and unrecoverable; there is no `releaseLocked`-style recovery path anymore. Guarded by `nonReentrant`.
+Invoice must be in `PAID` state or retry state after seller release action fails multiple times, otherwise reverts with `InvoiceNotEligibleForRefund`. Attempts to withdraw the price to the buyer; on success the invoice transitions to `REFUNDED`, is removed from the heap, and its balance is zeroed. On withdrawal failure, the retry counter is incremented and the invoice stays `PAID` for a future retry; once retries would exceed `MAX_WITHDRAWAL_RETRIES`, the escrowed funds are instead burned to `address(0)` and the invoice transitions to `BURNED`. This is terminal and unrecoverable; there is no `releaseLocked`-style recovery path anymore. Guarded by `nonReentrant`.
 
 ```solidity
 function refundBuyer(uint216 _invoiceId) public nonReentrant whenNotPaused;
@@ -277,7 +271,7 @@ function refundBuyer(uint216 _invoiceId) public nonReentrant whenNotPaused;
 
 **Parameters**
 
-|     Name     |    Type   |              Description              |
+|     Name     |   Type    |              Description              |
 | :----------: | :-------: | :-----------------------------------: |
 | `_invoiceId` | `uint216` | The ID of the invoice to be refunded. |
 
@@ -291,8 +285,8 @@ function hasDueTasks() external view returns (bool dueTasksExist);
 
 **Returns**
 
-|       Name       |  Type  |                        Description                       |
-| :----------------: | :----: | :-----------------------------------------------------------: |
+|      Name       |  Type  |                  Description                  |
+| :-------------: | :----: | :-------------------------------------------: |
 | `dueTasksExist` | `bool` | True when the earliest scheduled task is due. |
 
 #### processDueTasks
@@ -307,7 +301,7 @@ function processDueTasks() external nonReentrant whenNotPaused;
 
 #### calculateFee
 
-Calculates the fee based on the provided amount and the *current* global fee rate.
+Calculates the fee based on the provided amount and the _current_ global fee rate.
 
 Fee rate is expressed in basis points (1% = 100). This quotes the rate that would be captured by an invoice created right now; it does **not** reflect what a given existing invoice will actually be charged on release, since `release`/`refundBuyer`/the automated release path all use the fee rate snapshotted on the invoice at creation (`feeRate`), not the current global rate.
 
@@ -317,13 +311,13 @@ function calculateFee(uint256 _amount) public view returns (uint256 feeValue);
 
 **Parameters**
 
-|    Name   |    Type   |              Description              |
+|   Name    |   Type    |              Description              |
 | :-------: | :-------: | :-----------------------------------: |
 | `_amount` | `uint256` | The amount to calculate the fee from. |
 
 **Returns**
 
-|    Name    |    Type   |         Description        |
+|    Name    |   Type    |        Description         |
 | :--------: | :-------: | :------------------------: |
 | `feeValue` | `uint256` | The calculated fee amount. |
 
@@ -339,9 +333,9 @@ function setMinimumInvoiceValue(uint256 _newMinimumInvoiceValue) public onlyAuth
 
 **Parameters**
 
-|            Name               |    Type   |               Description               |
-| :---------------------------: | :-------: | :-------------------------------------: |
-| `_newMinimumInvoiceValue`     | `uint256` | The new minimum invoice value to set (in wei). |
+|           Name            |   Type    |                  Description                   |
+| :-----------------------: | :-------: | :--------------------------------------------: |
+| `_newMinimumInvoiceValue` | `uint256` | The new minimum invoice value to set (in wei). |
 
 #### setAutomation
 
@@ -355,8 +349,8 @@ function setAutomation(address _automationAddress) external onlyAuthorized;
 
 **Parameters**
 
-|        Name        |    Type   |                    Description                   |
-| :-------------------: | :-------: | :----------------------------------------------------: |
+|         Name         |   Type    |                Description                 |
+| :------------------: | :-------: | :----------------------------------------: |
 | `_automationAddress` | `address` | The new automation adapter address to set. |
 
 #### setDecisionWindow
@@ -371,7 +365,7 @@ function setDecisionWindow(uint256 _newDecisionWindow) external onlyAuthorized;
 
 **Parameters**
 
-|         Name         |    Type   |             Description             |
+|         Name         |   Type    |             Description             |
 | :------------------: | :-------: | :---------------------------------: |
 | `_newDecisionWindow` | `uint256` | The new decision window in seconds. |
 
@@ -385,8 +379,8 @@ function getAutomation() external view returns (address automationAddress);
 
 **Returns**
 
-|        Name        |    Type   |               Description               |
-| :-------------------: | :-------: | :-----------------------------------------: |
+|        Name         |   Type    |                Description                 |
+| :-----------------: | :-------: | :----------------------------------------: |
 | `automationAddress` | `address` | The configured automation adapter address. |
 
 #### getDecisionWindow
@@ -399,8 +393,8 @@ function getDecisionWindow() external view returns (uint256 decisionWindowValue)
 
 **Returns**
 
-|         Name          |    Type   |                 Description                |
-| :----------------------: | :-------: | :---------------------------------------------: |
+|         Name          |   Type    |               Description               |
+| :-------------------: | :-------: | :-------------------------------------: |
 | `decisionWindowValue` | `uint256` | The current decision window in seconds. |
 
 #### getNextInvoiceNonce
@@ -413,7 +407,7 @@ function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceVa
 
 **Returns**
 
-|           Name          |    Type   |          Description          |
+|          Name           |   Type    |          Description          |
 | :---------------------: | :-------: | :---------------------------: |
 | `nextInvoiceNonceValue` | `uint216` | The next invoice nonce value. |
 
@@ -427,13 +421,13 @@ function getInvoiceData(uint216 _invoiceId) public view returns (Invoice memory 
 
 **Parameters**
 
-|     Name     |    Type   |       Description      |
+|     Name     |   Type    |      Description       |
 | :----------: | :-------: | :--------------------: |
 | `_invoiceId` | `uint216` | The ID of the invoice. |
 
 **Returns**
 
-| Name |    Type   |    Description    |
+| Name |   Type    |    Description    |
 | :--: | :-------: | :---------------: |
 | `i`  | `Invoice` | The invoice data. |
 
@@ -447,7 +441,7 @@ function getMinimumInvoiceValue() external view returns (uint256 minimumValue);
 
 **Returns**
 
-|      Name      |    Type   |             Description            |
+|      Name      |   Type    |            Description             |
 | :------------: | :-------: | :--------------------------------: |
 | `minimumValue` | `uint256` | The minimum allowed invoice value. |
 
@@ -463,7 +457,7 @@ function getItems() external view returns (uint216[] memory items);
 
 **Returns**
 
-|   Name  |     Type    |     Description    |
+|  Name   |    Type     |    Description     |
 | :-----: | :---------: | :----------------: |
 | `items` | `uint216[]` | Array of task IDs. |
 
@@ -493,23 +487,23 @@ struct Invoice {
 }
 ```
 
-|        Field        |    Type   |                                                              Description                                                             |
-| :---------------------: | :-------: | :--------------------------------------------------------------------------------------------------------------------------------------: |
-|    `invoiceNonce`    | `uint216` |                                A unique identifier assigned to this invoice, typically sequentially.                                |
-|      `createdAt`     |  `uint40` |                                       The Unix timestamp when the invoice was created.                                        |
-|       `paidAt`       |  `uint40` |                                       The Unix timestamp when the payment was completed.                                      |
-|      `releaseAt`     |  `uint40` |                              The timestamp when funds in escrow can be released to the seller.                                |
-|    `invalidateAt`    |  `uint40` |                        The timestamp after which the invoice is considered invalid if unpaid.                                 |
-|      `expiresAt`     |  `uint40` | The timestamp after which the seller can no longer take action (accept/reject), and the buyer is refunded. |
-|     `holdPeriod`     | `uint32`  | Escrow hold duration (in seconds) set by the seller at creation, counted from acceptance. `0` means funds are releasable as soon as the payment is accepted. |
-|        `state`       |  `uint8`  |                                          The current state of the invoice.                                                    |
-| `withdrawalRetries`  |  `uint8`  |     Number of failed `IEscrow.withdraw` attempts by the automation path. Packed with `state` in the same storage slot.        |
-|       `feeRate`      | `uint16`  | The platform fee rate (in basis points) captured at invoice creation. Releases always charge this rate, so later changes to the global fee rate do not affect existing invoices. |
-|       `seller`       | `address` |                                     The address of the seller of the invoice.                                                 |
-|        `buyer`       | `address` |                                     The address of the buyer of the invoice.                                                  |
-|       `escrow`       | `address` |                    The address of the escrow contract managing the funds for this invoice.                                    |
-|        `price`       | `uint256` |                                       The total price of the invoice in wei.                                                  |
-|       `balance`      | `uint256` |                    The current amount held in escrow, net of any fees deducted upon acceptance. Zeroed on release or refund.   |
+|        Field        |   Type    |                                                                                   Description                                                                                    |
+| :-----------------: | :-------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+|   `invoiceNonce`    | `uint216` |                                                      A unique identifier assigned to this invoice, typically sequentially.                                                       |
+|     `createdAt`     | `uint40`  |                                                                 The Unix timestamp when the invoice was created.                                                                 |
+|      `paidAt`       | `uint40`  |                                                                The Unix timestamp when the payment was completed.                                                                |
+|     `releaseAt`     | `uint40`  |                                                        The timestamp when funds in escrow can be released to the seller.                                                         |
+|   `invalidateAt`    | `uint40`  |                                                      The timestamp after which the invoice is considered invalid if unpaid.                                                      |
+|     `expiresAt`     | `uint40`  |                                    The timestamp after which the seller can no longer take action (accept/reject), and the buyer is refunded.                                    |
+|    `holdPeriod`     | `uint32`  |           Escrow hold duration (in seconds) set by the seller at creation, counted from acceptance. `0` means funds are releasable as soon as the payment is accepted.           |
+|       `state`       |  `uint8`  |                                                                        The current state of the invoice.                                                                         |
+| `withdrawalRetries` |  `uint8`  |                                Number of failed `IEscrow.withdraw` attempts by the automation path. Packed with `state` in the same storage slot.                                |
+|      `feeRate`      | `uint16`  | The platform fee rate (in basis points) captured at invoice creation. Releases always charge this rate, so later changes to the global fee rate do not affect existing invoices. |
+|      `seller`       | `address` |                                                                    The address of the seller of the invoice.                                                                     |
+|       `buyer`       | `address` |                                                                     The address of the buyer of the invoice.                                                                     |
+|      `escrow`       | `address` |                                                     The address of the escrow contract managing the funds for this invoice.                                                      |
+|       `price`       | `uint256` |                                                                      The total price of the invoice in wei.                                                                      |
+|      `balance`      | `uint256` |                                    The current amount held in escrow, net of any fees deducted upon acceptance. Zeroed on release or refund.                                     |
 
 ### Events
 
@@ -521,10 +515,10 @@ Emitted when a new invoice is created.
 event InvoiceCreated(uint216 indexed invoiceId, Invoice invoice);
 ```
 
-| Name        | Type      | Description                                                                          |
-| :----------: | :-------: | :-----------------------------------------------------------------------------------: |
-| `invoiceId` | `uint216` | The unique identifier for the created invoice.                                       |
-| `invoice`   | `Invoice` | The full invoice struct containing buyer, price, timestamps, state, and metadata.    |
+|    Name     |   Type    |                                    Description                                    |
+| :---------: | :-------: | :-------------------------------------------------------------------------------: |
+| `invoiceId` | `uint216` |                  The unique identifier for the created invoice.                   |
+|  `invoice`  | `Invoice` | The full invoice struct containing buyer, price, timestamps, state, and metadata. |
 
 #### InvoicePaid
 
@@ -534,12 +528,12 @@ Emitted when an invoice payment is made.
 event InvoicePaid(uint216 indexed invoiceId, address indexed buyer, uint256 indexed amountPaid, uint40 expiresAt);
 ```
 
-| Name        | Type      | Description                                                                                         |
-| :----------: | :-------: | :--------------------------------------------------------------------------------------------------: |
-| `invoiceId` | `uint216` | The unique ID of the paid invoice.                                                                  |
-| `buyer`     | `address` | The address of the buyer who paid.                                                                  |
-| `amountPaid`| `uint256` | The amount paid towards the invoice in wei.                                                         |
-| `expiresAt` | `uint40`  | The timestamp by which the seller must accept or reject; after this the buyer is eligible for refund. |
+|     Name     |   Type    |                                              Description                                              |
+| :----------: | :-------: | :---------------------------------------------------------------------------------------------------: |
+| `invoiceId`  | `uint216` |                                  The unique ID of the paid invoice.                                   |
+|   `buyer`    | `address` |                                  The address of the buyer who paid.                                   |
+| `amountPaid` | `uint256` |                              The amount paid towards the invoice in wei.                              |
+| `expiresAt`  | `uint40`  | The timestamp by which the seller must accept or reject; after this the buyer is eligible for refund. |
 
 #### InvoiceRejected
 
@@ -549,10 +543,10 @@ Emitted when an invoice is rejected by the seller.
 event InvoiceRejected(uint216 indexed invoiceId, uint256 amount);
 ```
 
-| Name        | Type      | Description                             |
-| :----------: | :-------: | :--------------------------------------: |
-| `invoiceId` | `uint216` | The unique ID of the rejected invoice.  |
-| `amount`    | `uint256` | The escrow balance refunded to the buyer in wei. |
+|    Name     |   Type    |                   Description                    |
+| :---------: | :-------: | :----------------------------------------------: |
+| `invoiceId` | `uint216` |      The unique ID of the rejected invoice.      |
+|  `amount`   | `uint256` | The escrow balance refunded to the buyer in wei. |
 
 #### InvoiceRefunded
 
@@ -562,10 +556,10 @@ Emitted when an invoice is refunded to the buyer.
 event InvoiceRefunded(uint216 indexed invoiceId, uint256 amount);
 ```
 
-| Name        | Type      | Description                             |
-| :----------: | :-------: | :--------------------------------------: |
-| `invoiceId` | `uint216` | The unique ID of the refunded invoice.  |
-| `amount`    | `uint256` | The escrow balance refunded to the buyer in wei. |
+|    Name     |   Type    |                   Description                    |
+| :---------: | :-------: | :----------------------------------------------: |
+| `invoiceId` | `uint216` |      The unique ID of the refunded invoice.      |
+|  `amount`   | `uint256` | The escrow balance refunded to the buyer in wei. |
 
 #### InvoiceAccepted
 
@@ -575,9 +569,9 @@ Emitted when an invoice is accepted by the seller.
 event InvoiceAccepted(uint216 indexed invoiceId);
 ```
 
-| Name        | Type      | Description                             |
-| :----------: | :-------: | :--------------------------------------: |
-| `invoiceId` | `uint216` | The unique ID of the accepted invoice.  |
+|    Name     |   Type    |              Description               |
+| :---------: | :-------: | :------------------------------------: |
+| `invoiceId` | `uint216` | The unique ID of the accepted invoice. |
 
 #### InvoiceCanceled
 
@@ -587,9 +581,9 @@ Emitted when an invoice is canceled.
 event InvoiceCanceled(uint216 indexed invoiceId);
 ```
 
-| Name        | Type      | Description                             |
-| :----------: | :-------: | :--------------------------------------: |
-| `invoiceId` | `uint216` | The unique ID of the canceled invoice.  |
+|    Name     |   Type    |              Description               |
+| :---------: | :-------: | :------------------------------------: |
+| `invoiceId` | `uint216` | The unique ID of the canceled invoice. |
 
 #### InvoiceReleased
 
@@ -599,11 +593,11 @@ Emitted when an invoice is released (funds disbursed from escrow).
 event InvoiceReleased(uint216 indexed invoiceId, uint256 sellerAmount, uint256 fee);
 ```
 
-| Name           | Type      | Description                             |
-| :--------------: | :-------: | :--------------------------------------: |
-| `invoiceId`    | `uint216` | The unique ID of the released invoice.  |
-| `sellerAmount` | `uint256` | The net amount transferred to the seller, after fees. |
-| `fee`          | `uint256` | The platform fee deducted and sent to the fee receiver. |
+|      Name      |   Type    |                       Description                       |
+| :------------: | :-------: | :-----------------------------------------------------: |
+|  `invoiceId`   | `uint216` |         The unique ID of the released invoice.          |
+| `sellerAmount` | `uint256` |  The net amount transferred to the seller, after fees.  |
+|     `fee`      | `uint256` | The platform fee deducted and sent to the fee receiver. |
 
 #### WithdrawalRetried
 
@@ -613,12 +607,12 @@ Emitted when an automated withdrawal attempt fails and is retried.
 event WithdrawalRetried(uint216 indexed invoiceId, address indexed recipient, uint256 amount, uint8 attempt);
 ```
 
-| Name        | Type      | Description                                         |
-| :----------: | :-------: | :--------------------------------------------------: |
+|    Name     |   Type    |                     Description                     |
+| :---------: | :-------: | :-------------------------------------------------: |
 | `invoiceId` | `uint216` | The ID of the invoice whose withdrawal was retried. |
-| `recipient` | `address` | The address the withdrawal was attempted to.        |
-| `amount`    | `uint256` | The amount that failed to transfer.                 |
-| `attempt`   | `uint8`   | The retry attempt number.                           |
+| `recipient` | `address` |    The address the withdrawal was attempted to.     |
+|  `amount`   | `uint256` |         The amount that failed to transfer.         |
+|  `attempt`  |  `uint8`  |              The retry attempt number.              |
 
 #### AutomationUpdated
 
@@ -628,8 +622,8 @@ Emitted when the automation adapter authorized to call `processDueTasks` is upda
 event AutomationUpdated(address indexed automation);
 ```
 
-| Name          | Type      | Description                             |
-| :-------------: | :-------: | :---------------------------------------: |
+|     Name     |   Type    |             Description             |
+| :----------: | :-------: | :---------------------------------: |
 | `automation` | `address` | The new automation adapter address. |
 
 #### TransferFailed
@@ -640,11 +634,11 @@ Emitted when a transfer from the escrow fails. Best-effort for fee transfers, wh
 event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
 ```
 
-| Name        | Type      | Description                                  |
-| :----------: | :-------: | :-------------------------------------------: |
+|    Name     |   Type    |                     Description                     |
+| :---------: | :-------: | :-------------------------------------------------: |
 | `invoiceId` | `uint216` | The ID of the invoice associated with the transfer. |
-| `recipient` | `address` | The address the transfer was attempted to.   |
-| `amount`    | `uint256` | The amount that failed to transfer.          |
+| `recipient` | `address` |     The address the transfer was attempted to.      |
+|  `amount`   | `uint256` |         The amount that failed to transfer.         |
 
 #### PaymentBurned
 
@@ -654,26 +648,26 @@ Emitted when an invoice's escrowed funds are burned to `address(0)`. The funds a
 event PaymentBurned(uint216 indexed invoiceId, uint256 amount);
 ```
 
-| Name        | Type      | Description                                  |
-| :----------: | :-------: | :-------------------------------------------: |
+|    Name     |   Type    |                  Description                  |
+| :---------: | :-------: | :-------------------------------------------: |
 | `invoiceId` | `uint216` | The invoice whose escrowed funds were burned. |
-| `amount`    | `uint256` | The amount of ETH sent to `address(0)`.       |
+|  `amount`   | `uint256` |    The amount of ETH sent to `address(0)`.    |
 
 ### Errors
 
-| Error | Description |
-| :----: | :----------: |
-| `NotAuthorized()` | Thrown when the caller lacks the required role or permission. |
-| `ValueIsTooLow()` | Thrown when the provided value is lower than the required minimum. |
-| `InvalidHeapPosition()` | Thrown when a task's heap index is invalid. |
-| `InvalidDecisionWindow()` | Thrown when the decision window value provided is invalid (e.g., zero). |
-| `IncorrectPaymentAmount(uint256 _sent, uint256 _expected)` | Thrown when the payment amount sent does not match the expected invoice price. |
-| `InvoiceAlreadyExists()` | Thrown when trying to create an invoice that already exists. |
-| `InvalidInvoiceState(uint256 _invoiceState)` | Thrown when the invoice is in an invalid state for the requested action. |
-| `InvoiceIsNoLongerValid()` | Thrown when a payment is attempted after the invoice's payment validity window has expired. |
-| `AcceptanceWindowExceeded()` | Thrown when the seller attempts to take action on an invoice after the acceptance window has expired. |
-| `SellerCannotPayOwnedInvoice()` | Thrown when the seller of an invoice attempts to pay for their own invoice. |
-| `InvoiceNotEligibleForRefund()` | Thrown when a refund to the buyer cannot be issued (invoice not `PAID` or decision window not yet elapsed). |
-| `HoldPeriodHasNotBeenExceeded()` | Thrown when the hold period for an invoice has not yet been exceeded. |
-| `EscrowWithdrawFailed()` | Thrown when the escrow withdrawal fails during a manual release, reject, or refund. |
-| `ContractPaused()` | Thrown when a value-moving entrypoint is called while the system is paused. |
+|                           Error                            |                                                 Description                                                 |
+| :--------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------: |
+|                     `NotAuthorized()`                      |                        Thrown when the caller lacks the required role or permission.                        |
+|                     `ValueIsTooLow()`                      |                     Thrown when the provided value is lower than the required minimum.                      |
+|                  `InvalidHeapPosition()`                   |                                 Thrown when a task's heap index is invalid.                                 |
+|                 `InvalidDecisionWindow()`                  |                   Thrown when the decision window value provided is invalid (e.g., zero).                   |
+| `IncorrectPaymentAmount(uint256 _sent, uint256 _expected)` |               Thrown when the payment amount sent does not match the expected invoice price.                |
+|                  `InvoiceAlreadyExists()`                  |                        Thrown when trying to create an invoice that already exists.                         |
+|        `InvalidInvoiceState(uint256 _invoiceState)`        |                  Thrown when the invoice is in an invalid state for the requested action.                   |
+|                 `InvoiceIsNoLongerValid()`                 |         Thrown when a payment is attempted after the invoice's payment validity window has expired.         |
+|                `AcceptanceWindowExceeded()`                |    Thrown when the seller attempts to take action on an invoice after the acceptance window has expired.    |
+|              `SellerCannotPayOwnedInvoice()`               |                 Thrown when the seller of an invoice attempts to pay for their own invoice.                 |
+|              `InvoiceNotEligibleForRefund()`               | Thrown when a refund to the buyer cannot be issued (invoice not `PAID` or decision window not yet elapsed). |
+|              `HoldPeriodHasNotBeenExceeded()`              |                    Thrown when the hold period for an invoice has not yet been exceeded.                    |
+|                  `EscrowWithdrawFailed()`                  |             Thrown when the escrow withdrawal fails during a manual release, reject, or refund.             |
+|                     `ContractPaused()`                     |                 Thrown when a value-moving entrypoint is called while the system is paused.                 |

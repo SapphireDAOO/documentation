@@ -56,7 +56,7 @@ description: This page summarizes the project's current and projected recurring 
 
 
 
-* <mark style="color:$primary;">The gas fee</mark> is the fee paid for interaction with the chain. Every interaction, with the exclusion of the payment (made by the buyer), is done by our wallet (the marketplace wallet), each of which requires a gas fee.&#x20;
+* <mark style="color:$primary;">The gas fee</mark> is the fee paid for interaction with the chain. Every interaction, with the exclusion of the payment (made by the buyer), is done by our wallet (the Intermediated Platforms Operator wallet), each of which requires a gas fee.&#x20;
 * The protocol funds this wallet, and its balance shouldn't drop below a certain threshold to ensure transactions can be sent.&#x20;
 * These fees are paid in the native token of the Polygon network: POL
 

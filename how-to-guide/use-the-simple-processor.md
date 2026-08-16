@@ -4,39 +4,39 @@
 
 Connect your wallet to SapphireDao. Navigate to **Create Invoice** to create an invoice. Enter the payment amount in ETH, set how long funds should stay in escrow after you accept payment (the escrow hold period; leave it at 0 to make funds releasable immediately on acceptance), optionally add a [note](notes.md), and submit the Invoice. The system generates a payment link, and a QR code to share with the Buyer. The hold period is fixed once the invoice is created and cannot be changed afterwards by anyone, including the platform admin.
 
-Track invoices on the dashboard’s Invoice List, where users can monitor status like
+Track invoices on the dashboard’s Invoice Cards, where users can monitor status like
 
-* **Awaiting payment** – Awaiting payment from the buyer.
-* **Expired** – The invoice expired because it was not paid within the configured time window.
-* **Paid** – The Buyer has sent the payment.
-* **Accepted** – Seller has accepted the payment.
-* **Rejected** – Seller explicitly rejected the payment; buyer receives a refund.
-* **Refunded** – Funds were returned from escrow to the buyer (for example, after rejection or no seller action within the allowed time).
-* **Released** – Funds have been released to the seller.
-* **Burned** – All automated withdrawal attempts failed; the escrowed funds were permanently destroyed and cannot be recovered.
-* **Canceled** – The invoice was canceled.
+- **Awaiting payment** – Awaiting payment from the buyer.
+- **Expired** – The invoice expired because it was not paid within the configured time window.
+- **Paid** – The Buyer has sent the payment.
+- **Accepted** – Seller has accepted the payment.
+- **Rejected** – Seller explicitly rejected the payment; buyer receives a refund instantly.
+- **Refunded** – Funds were returned from escrow to the buyer (for example, after rejection or seller did not accepte/reject within the allowed time).
+- **Released** – Funds have been released to the seller.
+- **Burned** – All automated withdrawal attempts failed; the escrowed funds were permanently destroyed and cannot be recovered.
+- **Canceled** – The invoice was canceled.
 
-When the Buyer makes payment, the funds are held in escrow. After reviewing the payment, the seller decides whether to accept it and moves the invoice to the release period, rejecting it to refund the Buyer. The seller has a limited time window to take action;  if not action is taken within that period, the escrow funds are automatically refunded to the Buyer.
+When the Buyer makes payment, the funds are held in escrow. After reviewing the payment, the seller decides whether to accept it and moves the invoice to the hold period, rejecting it to refund the Buyer. The seller has a limited time window to take action; if no action is taken within that period, the escrow funds are automatically refunded to the Buyer.
 
 Once the payment is accepted, the release time is set to acceptance time plus the hold period the seller chose when creating the invoice; this period cannot be changed by anyone after creation, including the platform admin. After this period, the funds are released automatically to the seller, and the invoice status updates to Released once the release is triggered.
 
 {% hint style="info" %}
-**Key  Considerations for Creators**
+**Key Considerations for Sellers**
 
-* The escrow hold period is set by you when you create the invoice and is locked in from that point on; it cannot be adjusted later, even by the platform admin.
-* Invoices expire if not paid within a limited time.
-{% endhint %}
+- The escrow hold period is set by you when you create the invoice and is locked in from that point on; it cannot be adjusted later, even by the platform admin.
+- Invoices expire if not paid within a limited time.
+  {% endhint %}
 
 ### For Buyers
 
-The seller provides a QR code or payment link, which displays the invoice details, including the amount in ETH and any notes shared by the seller. The buyer pays the invoice in ETH using a cryptocurrency wallet, and also has the option to add a note (for example, a payment reference or message). Once the transaction is confirmed, the invoice status updates to **Paid**.
+The seller provides a QR code or payment link, which displays the invoice details, including the amount in ETH, the escrow hold period and any notes shared by the seller. The buyer pays the invoice in ETH using a cryptocurrency wallet, and also has the option to add a note (for example, a payment reference or message). Once the transaction is confirmed, the invoice status updates to **Paid**.
 
 {% hint style="info" %}
 Key Consideration for Buyers
 
-* If the Seller cancels the invoice or it expires, invoice can no longer be paid.
-* Payments are secure in escrow until the Seller approves and the release period ends.
-{% endhint %}
+- If the Seller cancels the invoice or it expires, invoice can no longer be paid.
+- Payments are secure in escrow until the Seller approves and the release period ends.
+  {% endhint %}
 
 ### How the Process Works
 

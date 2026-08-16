@@ -4,7 +4,7 @@ The OracleManager contract manages Chainlink price feeds and sequencer uptime ch
 
 It is deployed as a standalone contract and referenced by the IntermediatedPaymentProcessor via the `IOracleManager` interface. Write access is restricted to the owner of the linked [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md) contract.
 
-You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/v2/src/OracleManager.sol)
+You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/OracleManager.sol)
 
 ### State Variables
 
@@ -16,7 +16,7 @@ Shared storage contract whose owner controls oracle configuration writes.
 PaymentProcessorStorage public immutable ppStorage
 ```
 
-#### DEFAULT\_DECIMAL
+#### DEFAULT_DECIMAL
 
 Default number of decimals used for internal fixed-point arithmetic (e.g., 1e18 = 1.0).
 
@@ -24,7 +24,7 @@ Default number of decimals used for internal fixed-point arithmetic (e.g., 1e18 
 uint8 public constant DEFAULT_DECIMAL = 18
 ```
 
-#### SEQUENCER\_GRACE\_PERIOD
+#### SEQUENCER_GRACE_PERIOD
 
 Minimum time (in seconds) to wait after the L2 sequencer restarts before trusting price data. Protects against stale prices that accumulated while the sequencer was offline.
 
@@ -44,10 +44,10 @@ constructor(address _paymentProcessorStorageAddress, address _sequencerUptimeFee
 
 **Parameters**
 
-|               Name                |    Type   |                                              Description                                             |
-| :-------------------------------: | :-------: | :--------------------------------------------------------------------------------------------------: |
-| `_paymentProcessorStorageAddress` | `address` |              The shared storage contract whose owner governs oracle updates.                         |
-|      `_sequencerUptimeFeed`       | `address` | Address of the Chainlink sequencer uptime feed. Pass `address(0)` to disable the sequencer check.   |
+|               Name                |   Type    |                                            Description                                            |
+| :-------------------------------: | :-------: | :-----------------------------------------------------------------------------------------------: |
+| `_paymentProcessorStorageAddress` | `address` |                  The shared storage contract whose owner governs oracle updates.                  |
+|      `_sequencerUptimeFeed`       | `address` | Address of the Chainlink sequencer uptime feed. Pass `address(0)` to disable the sequencer check. |
 
 #### getUsdPerToken
 
@@ -61,14 +61,14 @@ function getUsdPerToken(address _paymentToken) external view returns (uint256);
 
 **Parameters**
 
-|       Name       |    Type   |                                       Description                                       |
-| :--------------: | :-------: | :-------------------------------------------------------------------------------------: |
-| `_paymentToken`  | `address` | The token address to price (use `address(0)` for native ETH). |
+|      Name       |   Type    |                          Description                          |
+| :-------------: | :-------: | :-----------------------------------------------------------: |
+| `_paymentToken` | `address` | The token address to price (use `address(0)` for native ETH). |
 
 **Returns**
 
-| Name |    Type   |                              Description                             |
-| :--: | :-------: | :------------------------------------------------------------------: |
+| Name |   Type    |                                  Description                                   |
+| :--: | :-------: | :----------------------------------------------------------------------------: |
 |      | `uint256` | The token's USD price with 8 decimals as returned by the Chainlink aggregator. |
 
 #### setPriceFeed
@@ -83,10 +83,10 @@ function setPriceFeed(address _token, PriceFeedConfig memory _config) external;
 
 **Parameters**
 
-|   Name    |        Type        |                                       Description                                      |
-| :-------: | :----------------: | :------------------------------------------------------------------------------------: |
-| `_token`  |     `address`      | The payment token address, or `address(0)` for native currency.                        |
-| `_config` | `PriceFeedConfig`  | The price feed configuration containing the aggregator address and heartbeat interval. |
+|   Name    |       Type        |                                      Description                                       |
+| :-------: | :---------------: | :------------------------------------------------------------------------------------: |
+| `_token`  |     `address`     |            The payment token address, or `address(0)` for native currency.             |
+| `_config` | `PriceFeedConfig` | The price feed configuration containing the aggregator address and heartbeat interval. |
 
 #### setSequencerUptimeFeed
 
@@ -100,9 +100,9 @@ function setSequencerUptimeFeed(address _sequencerUptimeFeed) external;
 
 **Parameters**
 
-|          Name           |    Type   |                                  Description                                  |
-| :---------------------: | :-------: | :---------------------------------------------------------------------------: |
-| `_sequencerUptimeFeed`  | `address` | The sequencer uptime feed address, or `address(0)` to disable the check. |
+|          Name          |   Type    |                               Description                                |
+| :--------------------: | :-------: | :----------------------------------------------------------------------: |
+| `_sequencerUptimeFeed` | `address` | The sequencer uptime feed address, or `address(0)` to disable the check. |
 
 #### getSequencerUptimeFeed
 
@@ -114,8 +114,8 @@ function getSequencerUptimeFeed() external view returns (address feed);
 
 **Returns**
 
-|  Name  |    Type   |                                Description                               |
-| :----: | :-------: | :----------------------------------------------------------------------: |
+|  Name  |   Type    |                                 Description                                  |
+| :----: | :-------: | :--------------------------------------------------------------------------: |
 | `feed` | `address` | The sequencer uptime feed address, or `address(0)` if the check is disabled. |
 
 ### Structs
@@ -131,10 +131,10 @@ struct PriceFeedConfig {
 }
 ```
 
-| Field        |    Type   |                                                          Description                                                         |
-| :-----------: | :-------: | :---------------------------------------------------------------------------------------------------------------------------: |
-| `aggregator` | `address` | Address of the Chainlink AggregatorV3 contract. Set to `address(0)` to disable the token.                                   |
-| `heartbeat`  |  `uint96` | Maximum acceptable age (in seconds) of a price update before it is considered stale. Should match the feed's update interval. |
+|    Field     |   Type    |                                                          Description                                                          |
+| :----------: | :-------: | :---------------------------------------------------------------------------------------------------------------------------: |
+| `aggregator` | `address` |                   Address of the Chainlink AggregatorV3 contract. Set to `address(0)` to disable the token.                   |
+| `heartbeat`  | `uint96`  | Maximum acceptable age (in seconds) of a price update before it is considered stale. Should match the feed's update interval. |
 
 ### Events
 
@@ -146,19 +146,19 @@ Emitted when the price feed configuration for a token is updated.
 event PriceFeedSet(address indexed token, address indexed aggregator, uint96 heartbeat);
 ```
 
-|     Name     |    Type   |                                Description                               |
-| :-----------: | :-------: | :--------------------------------------------------------------------------: |
-|    `token`    | `address` | The payment token address (`address(0)` for the native currency). |
-| `aggregator` | `address` |    The Chainlink aggregator address (`address(0)` removes the token).    |
-| `heartbeat`  |  `uint96` |          The maximum acceptable age (in seconds) of a price update.       |
+|     Name     |   Type    |                            Description                             |
+| :----------: | :-------: | :----------------------------------------------------------------: |
+|   `token`    | `address` | The payment token address (`address(0)` for the native currency).  |
+| `aggregator` | `address` | The Chainlink aggregator address (`address(0)` removes the token). |
+| `heartbeat`  | `uint96`  |     The maximum acceptable age (in seconds) of a price update.     |
 
 ### Errors
 
-| Error | Description |
-| :----: | :----------: |
-| `NotAuthorized()` | Thrown when the caller is not the owner of the storage contract. |
-| `UnsupportedToken()` | Thrown when a payment token has no configured price feed. |
-| `StalePrice()` | Thrown when the Chainlink round is incomplete (`answeredInRound < roundId`). |
-| `SequencerDown()` | Thrown when the L2 sequencer is down or still within the post-restart grace period. |
-| `StalePriceFeed()` | Thrown when the price feed update is older than the configured heartbeat. |
-| `InvalidPrice()` | Thrown when the Chainlink price feed returns a zero or negative answer. |
+|        Error         |                                     Description                                     |
+| :------------------: | :---------------------------------------------------------------------------------: |
+|  `NotAuthorized()`   |          Thrown when the caller is not the owner of the storage contract.           |
+| `UnsupportedToken()` |              Thrown when a payment token has no configured price feed.              |
+|    `StalePrice()`    |    Thrown when the Chainlink round is incomplete (`answeredInRound < roundId`).     |
+|  `SequencerDown()`   | Thrown when the L2 sequencer is down or still within the post-restart grace period. |
+|  `StalePriceFeed()`  |      Thrown when the price feed update is older than the configured heartbeat.      |
+|   `InvalidPrice()`   |       Thrown when the Chainlink price feed returns a zero or negative answer.       |

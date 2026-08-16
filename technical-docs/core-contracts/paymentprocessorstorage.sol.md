@@ -1,6 +1,6 @@
 # PaymentProcessorStorage.sol
 
-The PaymentProcessorStorage Solidity smart contract serves as the core state and configuration layer for the SapphireDao platform. It manages invoice ID sequencing, fee parameters, hold periods, and access permissions. Other contracts, such as [SimplePaymentProcessor.sol](simplepaymentprocessor.sol.md) and [IntermediatedPaymentProcessor.sol](intermediatedpaymentprocessor.sol.md), rely on it for global settings and controlled state updates.
+The PaymentProcessorStorage Solidity smart contract serves as the core state and configuration layer for the SapphireDao platform. It manages invoice ID sequencing, fee parameters, and access permissions. Other contracts, such as [SimplePaymentProcessor.sol](simplepaymentprocessor.sol.md) and [IntermediatedPaymentProcessor.sol](intermediatedpaymentprocessor.sol.md), rely on it for global settings and controlled state updates.
 
 Contract Address: [0xeb57f1f77f873d8481510c1f5ee44de340dc93fe](https://sepolia.etherscan.io/address/0xeb57F1F77F873d8481510c1f5Ee44dE340Dc93fe)
 
@@ -8,15 +8,15 @@ You can find the full implementation [here](https://github.com/SapphireDAOO/paym
 
 PaymentProcessorStorage.sol enables:
 
-* Sequential invoice ID management
-* System-wide configuration for fees, hold periods, and gas thresholds
-* Access control for privileged contract calls
-* State-sharing across other contracts in the SapphireDao ecosystem
-* Pausing both payment processors, either indefinitely (owner) or temporarily without owner involvement (emergency pauser)
+- Sequential invoice ID management
+- System-wide configuration for fees and gas thresholds
+- Access control for privileged contract calls
+- State-sharing across other contracts in the SapphireDao ecosystem
+- Pausing both payment processors, either indefinitely (owner) or temporarily without owner involvement (emergency pauser)
 
 ### State Variables
 
-#### DEFAULT\_PAYMENT\_VALIDITY\_PERIOD
+#### DEFAULT_PAYMENT_VALIDITY_PERIOD
 
 Default time window during which a created invoice remains valid for payment.
 
@@ -24,15 +24,15 @@ Default time window during which a created invoice remains valid for payment.
 uint256 public constant DEFAULT_PAYMENT_VALIDITY_PERIOD = 7 days
 ```
 
-#### BASIS\_POINTS
+#### BASIS_POINTS
 
-Total basis points used for percentage calculations. 10\_000 = 100%.
+Total basis points used for percentage calculations. 10_000 = 100%.
 
 ```solidity
 uint256 public constant BASIS_POINTS = 10_000
 ```
 
-#### EMERGENCY\_PAUSE\_DURATION
+#### EMERGENCY_PAUSE_DURATION
 
 How long an emergency pause holds without owner approval before it lapses automatically.
 
@@ -54,9 +54,9 @@ constructor(Configuration memory _configuration) ;
 
 **Parameters**
 
-|       Name       |       Type      |                                      Description                                      |
+|       Name       |      Type       |                                      Description                                      |
 | :--------------: | :-------------: | :-----------------------------------------------------------------------------------: |
-| `_configuration` | `Configuration` | The initial configuration parameters including owner, gas threshold, and hold period. |
+| `_configuration` | `Configuration` | The initial configuration parameters including owner, fee settings, and gas threshold. |
 
 #### updateInvoiceNonce
 
@@ -70,13 +70,13 @@ function updateInvoiceNonce(uint216 _by) external onlyAuthorized returns (uint21
 
 **Parameters**
 
-|  Name |    Type   |                  Description                  |
+| Name  |   Type    |                  Description                  |
 | :---: | :-------: | :-------------------------------------------: |
 | `_by` | `uint216` | The amount to increment the invoice nonce by. |
 
 **Returns**
 
-|       Name      |    Type   |                  Description                  |
+|      Name       |   Type    |                  Description                  |
 | :-------------: | :-------: | :-------------------------------------------: |
 | `totalInvoices` | `uint216` | The updated total number of invoices created. |
 
@@ -92,7 +92,7 @@ function setFeeReceiver(address _feeReceiverAddress) external onlyOwner;
 
 **Parameters**
 
-|          Name         |    Type   |              Description              |
+|         Name          |   Type    |              Description              |
 | :-------------------: | :-------: | :-----------------------------------: |
 | `_feeReceiverAddress` | `address` | The address to receive protocol fees. |
 
@@ -108,8 +108,8 @@ function setFeeRate(uint96 _newFeeRate) external onlyOwner;
 
 **Parameters**
 
-|      Name     |    Type   |                Description               |
-| :-----------: | :-------: | :--------------------------------------: |
+|     Name      |   Type   |                        Description                        |
+| :-----------: | :------: | :-------------------------------------------------------: |
 | `_newFeeRate` | `uint96` | The new fee rate in basis points (1% = 100 basis points). |
 
 #### setGasThreshold
@@ -124,15 +124,15 @@ function setGasThreshold(uint96 _newGasThreshold) external onlyOwner;
 
 **Parameters**
 
-|        Name         |    Type   |                   Description                  |
-| :-----------------: | :-------: | :--------------------------------------------: |
-| `_newGasThreshold`  | `uint96` | The new gas threshold value (in units of gas). |
+|        Name        |   Type   |                  Description                   |
+| :----------------: | :------: | :--------------------------------------------: |
+| `_newGasThreshold` | `uint96` | The new gas threshold value (in units of gas). |
 
 #### setPaymentValidityDuration
 
-Updates the payment validity duration.
+Updates the payment validity duration: how long after creation an invoice can still be paid before it expires unpaid (reverts with `InvoiceIsNoLongerValid` on a payment attempt after that window).
 
-Only callable by the contract owner.
+Only callable by the contract owner. Applies to invoices created after the update; the validity window on an already-created invoice is fixed to the value in effect at creation.
 
 ```solidity
 function setPaymentValidityDuration(uint256 _newValidityDuration) external onlyOwner;
@@ -140,41 +140,25 @@ function setPaymentValidityDuration(uint256 _newValidityDuration) external onlyO
 
 **Parameters**
 
-|          Name          |    Type   |              Description              |
-| :--------------------: | :-------: | :-----------------------------------: |
-| `_newValidityDuration` | `uint256` | The new validity duration in seconds. |
+|          Name          |   Type    |                                                   Description                                                   |
+| :--------------------: | :-------: | :-------------------------------------------------------------------------------------------------------------: |
+| `_newValidityDuration` | `uint256` | The new payment window in seconds: how long an unpaid invoice remains payable after creation before it expires. |
 
-#### setDefaultHoldPeriod
+#### setIntermediatedPlatformsOperator
 
-Updates the default hold period for all new invoices.
-
-Only callable by the contract owner. Reverts with `HoldPeriodCanNotBeZero` if `_newDefaultHoldPeriod` is zero.
-
-```solidity
-function setDefaultHoldPeriod(uint96 _newDefaultHoldPeriod) public onlyOwner;
-```
-
-**Parameters**
-
-|           Name          |    Type   |               Description               |
-| :---------------------: | :-------: | :-------------------------------------: |
-| `_newDefaultHoldPeriod` | `uint96` | The new default hold period in seconds. |
-
-#### setMarketplaceAddress
-
-Updates the intermediated platform address allowed to perform privileged operations.
+Updates the sole platform operator wallet authorized to call privileged `IntermediatedPaymentProcessor` functions (creating invoices, triggering releases and refunds, and resolving disputes). Stored internally as `intermediatedPlatformsOperator`; emits `IntermediatedPlatformsOperatorUpdated`.
 
 Callable only by the contract owner.
 
 ```solidity
-function setMarketplaceAddress(address _marketplaceAddress) external onlyOwner;
+function setIntermediatedPlatformsOperator(address _intermediatedPlatformsOperatorWallet) external onlyOwner;
 ```
 
 **Parameters**
 
-|          Name         |    Type   |          Description         |
-| :-------------------: | :-------: | :--------------------------: |
-| `_marketplaceAddress` | `address` | The new intermediated platform address. |
+|                  Name                   |   Type    |               Description               |
+| :-------------------------------------: | :-------: | :-------------------------------------: |
+| `_intermediatedPlatformsOperatorWallet` | `address` | The new platform operator wallet address. |
 
 #### pause
 
@@ -228,8 +212,8 @@ function setEmergencyPauser(address _emergencyPauser) external onlyOwner;
 
 **Parameters**
 
-|        Name         |    Type   |               Description               |
-| :--------------------: | :-------: | :-----------------------------------------: |
+|        Name        |   Type    |            Description            |
+| :----------------: | :-------: | :-------------------------------: |
 | `_emergencyPauser` | `address` | The new emergency pauser address. |
 
 #### isPaused
@@ -244,8 +228,8 @@ function isPaused() public view returns (bool pausedState);
 
 **Returns**
 
-|      Name      |  Type  |          Description         |
-| :---------------: | :----: | :------------------------------: |
+|     Name      |  Type  |    Description    |
+| :-----------: | :----: | :---------------: |
 | `pausedState` | `bool` | True when paused. |
 
 #### getEmergencyPauser
@@ -258,8 +242,8 @@ function getEmergencyPauser() external view returns (address emergencyPauserAddr
 
 **Returns**
 
-|          Name           |    Type   |            Description           |
-| :------------------------: | :-------: | :----------------------------------: |
+|           Name           |   Type    |          Description          |
+| :----------------------: | :-------: | :---------------------------: |
 | `emergencyPauserAddress` | `address` | The emergency pauser address. |
 
 #### getEmergencyPauseExpiry
@@ -272,13 +256,13 @@ function getEmergencyPauseExpiry() external view returns (uint256 expiry);
 
 **Returns**
 
-|   Name   |    Type   |                          Description                         |
-| :--------: | :-------: | :----------------------------------------------------------------: |
+|   Name   |   Type    |                          Description                           |
+| :------: | :-------: | :------------------------------------------------------------: |
 | `expiry` | `uint256` | The expiry timestamp, or 0 when no emergency pause is pending. |
 
 #### getPaymentValidityDuration
 
-Returns the duration for which a payment remains valid.
+Returns the current payment window: how long a newly created invoice stays payable before it expires unpaid.
 
 ```solidity
 function getPaymentValidityDuration() external view returns (uint256 validDuration);
@@ -286,7 +270,7 @@ function getPaymentValidityDuration() external view returns (uint256 validDurati
 
 **Returns**
 
-|       Name      |    Type   |                Description                |
+|      Name       |   Type    |                Description                |
 | :-------------: | :-------: | :---------------------------------------: |
 | `validDuration` | `uint256` | The payment validity duration in seconds. |
 
@@ -300,7 +284,7 @@ function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceVa
 
 **Returns**
 
-|           Name          |    Type   |          Description          |
+|          Name           |   Type    |          Description          |
 | :---------------------: | :-------: | :---------------------------: |
 | `nextInvoiceNonceValue` | `uint216` | The next invoice nonce value. |
 
@@ -314,7 +298,7 @@ function totalInvoiceCreated() public view returns (uint216 totalInvoices);
 
 **Returns**
 
-|       Name      |    Type   |              Description              |
+|      Name       |   Type    |              Description              |
 | :-------------: | :-------: | :-----------------------------------: |
 | `totalInvoices` | `uint216` | The total number of invoices created. |
 
@@ -328,7 +312,7 @@ function getFeeRate() external view returns (uint256 feeRate);
 
 **Returns**
 
-|    Name   |    Type   |               Description              |
+|   Name    |   Type    |              Description               |
 | :-------: | :-------: | :------------------------------------: |
 | `feeRate` | `uint256` | The platform fee rate in basis points. |
 
@@ -342,37 +326,23 @@ function getFeeReceiver() external view returns (address feeReceiver);
 
 **Returns**
 
-|      Name     |    Type   |        Description        |
+|     Name      |   Type    |        Description        |
 | :-----------: | :-------: | :-----------------------: |
 | `feeReceiver` | `address` | The fee receiver address. |
 
-#### getMarketplace
+#### getIntermediatedPlatformsOperator
 
-Returns the address of the authorized intermediated platform.
+Returns the address of the authorized Intermediated Platforms Operator.
 
 ```solidity
-function getMarketplace() external view returns (address marketplace);
+function getIntermediatedPlatformsOperator() external view returns (address intermediatedPlatformsOperator);
 ```
 
 **Returns**
 
-|      Name     |    Type   |        Description       |
-| :-----------: | :-------: | :----------------------: |
-| `marketplace` | `address` | The intermediated platform address. |
-
-#### getDefaultHoldPeriod
-
-Gets the default hold period for invoices.
-
-```solidity
-function getDefaultHoldPeriod() external view returns (uint256 defaultHoldPeriod);
-```
-
-**Returns**
-
-|         Name        |    Type   |             Description             |
-| :-----------------: | :-------: | :---------------------------------: |
-| `defaultHoldPeriod` | `uint256` | The default hold period in seconds. |
+|              Name                |   Type    |                  Description                  |
+| :-------------------------------: | :-------: | :--------------------------------------------: |
+| `intermediatedPlatformsOperator` | `address` | The Intermediated Platforms Operator address. |
 
 #### getGasThreshold
 
@@ -386,7 +356,7 @@ function getGasThreshold() external view returns (uint256 gasThreshold);
 
 **Returns**
 
-|      Name      |    Type   |            Description           |
+|      Name      |   Type    |           Description            |
 | :------------: | :-------: | :------------------------------: |
 | `gasThreshold` | `uint256` | The current gas threshold value. |
 
@@ -401,20 +371,18 @@ struct Configuration {
     address owner;
     uint96 feeRate;
     address feeReceiver;
-    uint96 defaultHoldPeriod;
-    address marketplace;
+    address intermediatedPlatformsOperator;
     uint96 gasThreshold;
 }
 ```
 
-|        Field        |    Type   |                                          Description                                         |
-| :-------------------: | :-------: | :---------------------------------------------------------------------------------------------: |
-|       `owner`        | `address` |                    The address authorized to modify configuration parameters.                   |
-|      `feeRate`       |  `uint96` |          Platform fee rate in basis points (BPS). 100 BPS = 1%; 10,000 BPS = 100%.               |
-|     `feeReceiver`    | `address` |                              Address that receives platform fees.                                |
-| `defaultHoldPeriod`  |  `uint96` |                The default hold period for funds in escrow, measured in seconds.                |
-|     `marketplace`    | `address` |         Address authorized to interact with invoice creation and specific management functions. |
-|    `gasThreshold`    |  `uint96` |                 The minimum amount of gas that must remain to continue processing tasks.        |
+|        Field        |   Type    |                                       Description                                       |
+| :-----------------: | :-------: | :-------------------------------------------------------------------------------------: |
+|       `owner`       | `address` |               The address authorized to modify configuration parameters.                |
+|      `feeRate`      | `uint96`  |        Platform fee rate in basis points (BPS). 100 BPS = 1%; 10,000 BPS = 100%.        |
+|    `feeReceiver`    | `address` |                          Address that receives platform fees.                           |
+| `intermediatedPlatformsOperator` | `address` | Address authorized to interact with invoice creation and specific management functions. |
+|   `gasThreshold`    | `uint96`  |        The minimum amount of gas that must remain to continue processing tasks.         |
 
 ### Events
 
@@ -426,8 +394,8 @@ Emitted once at construction with the initial configuration parameters.
 event ConfigurationInitialized(Configuration config);
 ```
 
-|   Name   |         Type        |                       Description                      |
-| :-------: | :------------------: | :--------------------------------------------------------: |
+|   Name   |      Type       |                     Description                      |
+| :------: | :-------------: | :--------------------------------------------------: |
 | `config` | `Configuration` | The configuration the contract was initialized with. |
 
 #### AuthorizationUpdated
@@ -438,10 +406,10 @@ Emitted when an address is granted or revoked authorization.
 event AuthorizationUpdated(address indexed account, bool authorized);
 ```
 
-|     Name     |    Type   |                     Description                    |
-| :-----------: | :-------: | :------------------------------------------------------: |
-|   `account`   | `address` | The address whose authorization status changed. |
-| `authorized` |   `bool`  |            The new authorization status.           |
+|     Name     |   Type    |                   Description                   |
+| :----------: | :-------: | :---------------------------------------------: |
+|  `account`   | `address` | The address whose authorization status changed. |
+| `authorized` |  `bool`   |          The new authorization status.          |
 
 #### FeeReceiverUpdated
 
@@ -451,21 +419,21 @@ Emitted when the fee receiver address is updated.
 event FeeReceiverUpdated(address indexed feeReceiver);
 ```
 
-|      Name      |    Type   |            Description           |
-| :-------------: | :-------: | :----------------------------------: |
+|     Name      |   Type    |          Description          |
+| :-----------: | :-------: | :---------------------------: |
 | `feeReceiver` | `address` | The new fee receiver address. |
 
-#### MarketplaceUpdated
+#### IntermediatedPlatformsOperatorUpdated
 
-Emitted when the intermediated platform address is updated.
+Emitted when the Intermediated Platforms Operator address is updated.
 
 ```solidity
-event MarketplaceUpdated(address indexed marketplace);
+event IntermediatedPlatformsOperatorUpdated(address indexed intermediatedPlatformsOperator);
 ```
 
-|      Name      |    Type   |          Description         |
-| :-------------: | :-------: | :------------------------------: |
-| `marketplace` | `address` | The new intermediated platform address. |
+|              Name                |   Type    |                   Description                    |
+| :-------------------------------: | :-------: | :-----------------------------------------------: |
+| `intermediatedPlatformsOperator` | `address` | The new Intermediated Platforms Operator address. |
 
 #### FeeRateUpdated
 
@@ -475,8 +443,8 @@ Emitted when the platform fee rate is updated.
 event FeeRateUpdated(uint96 feeRate);
 ```
 
-|   Name   |   Type   |                Description               |
-| :-------: | :------: | :------------------------------------------: |
+|   Name    |   Type   |            Description            |
+| :-------: | :------: | :-------------------------------: |
 | `feeRate` | `uint96` | The new fee rate in basis points. |
 
 #### GasThresholdUpdated
@@ -487,21 +455,9 @@ Emitted when the automated task-processing gas threshold is updated.
 event GasThresholdUpdated(uint96 gasThreshold);
 ```
 
-|      Name      |   Type   |            Description           |
-| :-------------: | :------: | :----------------------------------: |
+|      Name      |   Type   |         Description          |
+| :------------: | :------: | :--------------------------: |
 | `gasThreshold` | `uint96` | The new gas threshold value. |
-
-#### DefaultHoldPeriodUpdated
-
-Emitted when the default hold period is updated.
-
-```solidity
-event DefaultHoldPeriodUpdated(uint96 defaultHoldPeriod);
-```
-
-|          Name          |   Type   |                 Description                |
-| :---------------------: | :------: | :--------------------------------------------: |
-| `defaultHoldPeriod` | `uint96` | The new default hold period in seconds. |
 
 #### PaymentValidityDurationUpdated
 
@@ -511,8 +467,8 @@ Emitted when the payment validity duration is updated.
 event PaymentValidityDurationUpdated(uint256 validityDuration);
 ```
 
-|        Name        |    Type   |                    Description                    |
-| :-------------------: | :-------: | :----------------------------------------------------: |
+|        Name        |   Type    |                 Description                 |
+| :----------------: | :-------: | :-----------------------------------------: |
 | `validityDuration` | `uint256` | The new payment validity window in seconds. |
 
 #### Paused
@@ -523,8 +479,8 @@ Emitted when the owner pauses the payment processors.
 event Paused(address indexed account);
 ```
 
-|   Name    |    Type   |            Description           |
-| :---------: | :-------: | :----------------------------------: |
+|   Name    |   Type    |      Description       |
+| :-------: | :-------: | :--------------------: |
 | `account` | `address` | The owner that paused. |
 
 #### Unpaused
@@ -535,8 +491,8 @@ Emitted when the owner lifts a pause.
 event Unpaused(address indexed account);
 ```
 
-|   Name    |    Type   |            Description           |
-| :---------: | :-------: | :----------------------------------: |
+|   Name    |   Type    |       Description        |
+| :-------: | :-------: | :----------------------: |
 | `account` | `address` | The owner that unpaused. |
 
 #### EmergencyPaused
@@ -547,10 +503,10 @@ Emitted when the emergency pauser halts the payment processors.
 event EmergencyPaused(address indexed account, uint256 expiry);
 ```
 
-|   Name    |    Type   |                        Description                        |
-| :---------: | :-------: | :------------------------------------------------------------: |
-| `account` | `address` |               The emergency pauser.                     |
-| `expiry` | `uint256` | The timestamp at which the pause lapses without owner approval. |
+|   Name    |   Type    |                           Description                           |
+| :-------: | :-------: | :-------------------------------------------------------------: |
+| `account` | `address` |                      The emergency pauser.                      |
+| `expiry`  | `uint256` | The timestamp at which the pause lapses without owner approval. |
 
 #### EmergencyPauseApproved
 
@@ -560,8 +516,8 @@ Emitted when the owner converts an emergency pause into an indefinite pause.
 event EmergencyPauseApproved(address indexed account);
 ```
 
-|   Name    |    Type   |            Description           |
-| :---------: | :-------: | :----------------------------------: |
+|   Name    |   Type    |       Description        |
+| :-------: | :-------: | :----------------------: |
 | `account` | `address` | The owner that approved. |
 
 #### EmergencyPauserUpdated
@@ -572,17 +528,16 @@ Emitted when the emergency pauser address is updated.
 event EmergencyPauserUpdated(address indexed emergencyPauser);
 ```
 
-|         Name          |    Type   |                Description               |
-| :-----------------------: | :-------: | :-------------------------------------------: |
+|       Name        |   Type    |            Description            |
+| :---------------: | :-------: | :-------------------------------: |
 | `emergencyPauser` | `address` | The new emergency pauser address. |
 
 ### Errors
 
-| Error | Description |
-| :----: | :----------: |
-| `NotAuthorized()` | Thrown when a caller attempts an action without the required authorization. |
-| `HoldPeriodCanNotBeZero()` | Thrown when the hold period provided is zero, which is invalid. |
-| `InvalidFeeRate()` | Thrown when the provided fee rate exceeds the maximum allowed (10,000 basis points = 100%). |
-| `AlreadyPaused()` | Thrown when pausing a system that is already paused, or that has an unresolved emergency pause. |
-| `NotPaused()` | Thrown when unpausing a system that is not paused. |
-| `NoActiveEmergencyPause()` | Thrown when approving an emergency pause that is absent or already expired. |
+|           Error            |                                           Description                                           |
+| :------------------------: | :---------------------------------------------------------------------------------------------: |
+|     `NotAuthorized()`      |           Thrown when a caller attempts an action without the required authorization.           |
+|     `InvalidFeeRate()`     |   Thrown when the provided fee rate exceeds the maximum allowed (10,000 basis points = 100%).   |
+|     `AlreadyPaused()`      | Thrown when pausing a system that is already paused, or that has an unresolved emergency pause. |
+|       `NotPaused()`        |                       Thrown when unpausing a system that is not paused.                        |
+| `NoActiveEmergencyPause()` |           Thrown when approving an emergency pause that is absent or already expired.           |

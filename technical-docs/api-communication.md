@@ -2,7 +2,7 @@
 
 ## Sapphire Contract API – REST Endpoints
 
-This API provides HTTP endpoints for interacting with the Sapphire DAO's `AdvancedPaymentProcessor` smart contract on the Ethereum Sepolia testnet at address `0x90F3F9816a637A8f30576Deecd6B09D825EB94C2`. It supports invoice creation, cancellation, refunding, dispute creation, dispute resolution, and fund release for secure, decentralized transactions in a marketplace.
+This API provides HTTP endpoints for interacting with the Sapphire DAO's `AdvancedPaymentProcessor` smart contract on the Ethereum Sepolia testnet at address `0x90F3F9816a637A8f30576Deecd6B09D825EB94C2`. It supports invoice creation, cancellation, refunding, dispute creation, dispute resolution, and fund release for secure, decentralized transactions between buyers and sellers.
 
 **Base URL**: [https://sapphiredaotesting.com/](https://sapphiredaotesting.com/)
 
@@ -72,7 +72,7 @@ This API provides HTTP endpoints for interacting with the Sapphire DAO's `Advanc
 * When there is only a single invoice, the `metaInvoiceId` field returns an empty string
 * The `price` is converted to token amounts using Chainlink price feeds via the contract’s `getTokenValueFromUsd` function.
 * A single invoice triggers `createSingleInvoice`, emitting an `InvoiceCreated` event. Multiple invoices trigger `createMetaInvoice`, emitting a `MetaInvoiceCreated` event.
-* Only the `marketplace` address (retrieved via `PaymentProcessorStorage.GetMarketplaceAddress`) can call these functions.
+* Only the `intermediatedPlatformsOperator` address (retrieved via `PaymentProcessorStorage.GetIntermediatedPlatformsOperatorAddress`) can call these functions.
 * The `orderId` in the request (client-provided `requestId`) is hashed to a `uint216` using `utils.OrderIDToUint216` for on-chain storage, resulting in a numeric string (e.g., `"59808737901387817475691215581034097896123425895641016234844280889"`).
 * The response uses `requestId` for the client-provided ID and `orderId` for the generated on-chain ID.
 
@@ -115,12 +115,12 @@ This API provides HTTP endpoints for interacting with the Sapphire DAO's `Advanc
 
 ```json
 {
-  "error": "error fetching marketplace address",
+  "error": "error fetching intermediated platforms operator address",
   "reason": "<blockchain error message>"
 }
 ```
 
-* Returned if fetching the marketplace address fails.
+* Returned if fetching the Intermediated Platforms Operator address fails.
 
 **Error (500)**:
 
@@ -262,12 +262,12 @@ curl -X POST https://sapphiredaotesting.com/release \
 
 ```json
 {
-  "error": "error fetching marketplace address",
+  "error": "error fetching intermediated platforms operator address",
   "reason": "<blockchain error message>"
 }
 ```
 
-* Returned if fetching the marketplace address fails.
+* Returned if fetching the Intermediated Platforms Operator address fails.
 
 **Error (500)**:
 
@@ -313,10 +313,10 @@ curl -X POST https://sapphiredaotesting.com/createDispute \
 |     Field     |   Type  |                  Required                  |                                Description                               |
 | :-----------: | :-----: | :----------------------------------------: | :----------------------------------------------------------------------: |
 |   `orderId`   |  string |                      ✅                     |              On-chain order ID (e.g., `598087379013878...`).             |
-|  `resolution` | integer |                      ✅                     |   Enum value specifying the action type (see MarketplaceAction below).   |
+|  `resolution` | integer |                      ✅                     |   Enum value specifying the action type (see IntermediatedPlatformsOperatorAction below).   |
 | `sellerShare` |  string | ❌ Only if `resolution = 2` (SettleDispute) | Seller’s share in basis points (e.g., `"10000"` = 100%, `"9000"` = 90%). |
 
-**MarketplaceAction Enum (`resolution`)**
+**IntermediatedPlatformsOperatorAction Enum (`resolution`)**
 
 | Value |      Name      |                                               Description                                              |             Contract Function            |
 | :---: | :------------: | :----------------------------------------------------------------------------------------------------: | :--------------------------------------: |
@@ -529,7 +529,7 @@ curl -X POST https://sapphiredaotesting.com/refund \
 * The `AdvancedPaymentProcessor` contract is deployed on the Ethereum Sepolia testnet and uses Solady libraries (`SafeTransferLib`, `SafeCastLib`, `FixedPointMathLib`) for secure token transfers, type casting, and fixed-point arithmetic.
 * Invoice states are: `INITIATED` (1), `PAID` (2), `REFUNDED` (3), `CANCELED` (4), `DISPUTED` (5), `DISPUTE_RESOLVED` (6), `DISPUTE_DISMISSED` (7), `DISPUTE_SETTLED` (8), `RELEASED` (9).
 * The contract uses Chainlink price feeds (`AggregatorV3Interface`) for USD-to-token conversions, supporting ETH and ERC20 tokens.
-* The `marketplace` address, retrieved via `PaymentProcessorStorage.GetMarketplaceAddress`, controls privileged operations (`createSingleInvoice`, `createMetaInvoice`, `createDispute`).
+* The `intermediatedPlatformsOperator` address, retrieved via `PaymentProcessorStorage.GetIntermediatedPlatformsOperatorAddress`, controls privileged operations (`createSingleInvoice`, `createMetaInvoice`, `createDispute`).
 * Transaction hashes are linked to `https://sepolia.etherscan.io/tx/`.
 * The `IAdvancedPaymentProcessorInvoiceCreationParam` struct in Go ensures type safety for `orderId` (string), `seller` (Ethereum address), `price` (big.Int), and `escrowHoldPeriod` (big.Int).
 * Blockchain errors are mapped to human-readable messages via `utils.RevertErrorDescriptions`, including:

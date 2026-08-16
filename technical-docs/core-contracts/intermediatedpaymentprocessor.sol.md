@@ -155,7 +155,7 @@ Only callable by the intermediated platform.
 ```solidity
 function createSingleInvoice(InvoiceCreationParam memory _param)
     external
-    onlyMarketplace
+    onlyIntermediatedPlatformsOperator
     whenNotPaused
     returns (uint216 invoiceId);
 ```
@@ -181,7 +181,7 @@ Only callable by the intermediated platform. Each sub-invoice is created using t
 ```solidity
 function createMetaInvoice(InvoiceCreationParam[] memory _param)
     external
-    onlyMarketplace
+    onlyIntermediatedPlatformsOperator
     whenNotPaused
     returns (uint216 metaInvoiceId);
 ```
@@ -255,7 +255,7 @@ Creates a dispute for an invoice.
 Callable only by the intermediated platform. Only valid for invoices in the PAID state (reverts `InvalidInvoiceState` otherwise). Transitions the invoice to DISPUTED, blocking `release` until the dispute is resolved, dismissed, or settled. There is no automated release queue/heap in this contract; release only ever happens via an explicit intermediated-platform call.
 
 ```solidity
-function createDispute(uint216 _invoiceId) external onlyMarketplace whenNotPaused;
+function createDispute(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator whenNotPaused;
 ```
 
 **Parameters**
@@ -273,7 +273,7 @@ Callable only by the intermediated platform. Must be called after a dispute is c
 ```solidity
 function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare)
     external
-    onlyMarketplace
+    onlyIntermediatedPlatformsOperator
     whenNotPaused;
 ```
 
@@ -292,7 +292,7 @@ Releases escrowed funds to the seller after the release window has passed.
 Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global fee rate, so a later change to the global rate never affects an already-created invoice. The invoice transitions to RELEASED and its balance is zeroed. There is no heap; this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
 
 ```solidity
-function release(uint216 _invoiceId) external onlyMarketplace whenNotPaused;
+function release(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator whenNotPaused;
 ```
 
 **Parameters**
@@ -306,7 +306,7 @@ function release(uint216 _invoiceId) external onlyMarketplace whenNotPaused;
 Issues a partial or full refund for a paid invoice. Callable only by the intermediated platform; invoice must be in the PAID state. `_refundShare` must be between 1 and 10,000 basis points. A full refund (10,000 BPS) transitions the invoice to REFUNDED; a partial refund reduces the escrow balance but leaves the invoice in PAID state so it can still be released later.
 
 ```solidity
-function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketplace whenNotPaused;
+function refund(uint216 _invoiceId, uint256 _refundShare) external onlyIntermediatedPlatformsOperator whenNotPaused;
 ```
 
 **Parameters**
@@ -323,7 +323,7 @@ Cancels a single invoice before payment.
 Callable only by the intermediated platform. If the invoice belongs to a meta-invoice, the meta-invoice total price is reduced accordingly. Only valid for invoices in the CREATED state.
 
 ```solidity
-function cancelInvoice(uint216 _invoiceId) public onlyMarketplace;
+function cancelInvoice(uint216 _invoiceId) public onlyIntermediatedPlatformsOperator;
 ```
 
 **Parameters**
@@ -339,7 +339,7 @@ Finalizes a dispute and marks the invoice as resolved.
 Callable only by the intermediated platform after a dispute has been raised by the buyer. This function is used when both parties (buyer and seller) have come to an agreement without requiring arbitration, or when the dispute period has expired with no further action. Transitions the invoice state from DISPUTED to DISPUTE\_RESOLVED.
 
 ```solidity
-function resolveDispute(uint216 _invoiceId) external onlyMarketplace;
+function resolveDispute(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator;
 ```
 
 **Parameters**
@@ -583,7 +583,7 @@ struct Invoice {
 |       `expiresAt`      |  `uint40` |                                     The timestamp after which the invoice is no longer payable.                          |
 |         `state`        |  `uint8`  |                                                 Current state of the invoice.                                            |
 |  `withdrawalRetries`   |  `uint8`  | Reserved retry counter retained for storage-layout compatibility; unused now that releases are manual. Packed with `state`. |
-|   `escrowHoldPeriod`   | `uint32`  | Custom hold duration (in seconds) between payment and release, set at invoice creation. When non-zero, overrides the storage default. |
+|   `escrowHoldPeriod`   | `uint32`  | Custom hold duration (in seconds) between payment and release, set at invoice creation. |
 |       `feeRate`        | `uint16`  | The platform fee rate (in basis points) captured at invoice creation. Releases and dispute settlements always charge this rate, so later changes to the global fee rate do not affect existing invoices. |
 |     `metaInvoiceId`    | `uint216` |              Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.                        |
 |         `buyer`        | `address` |                                              Address of the buyer.                                                       |

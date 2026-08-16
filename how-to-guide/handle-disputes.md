@@ -8,6 +8,6 @@ Once an invoice has been paid, buyers can initiate a dispute before it is eligib
 
 • **Settled** – Payment is split between buyer and seller
 
-When a dispute is raised, the invoice moves to Disputed and the funds remain held in escrow. The authorized third-party platform reviews both parties’ claims and then either dismisses the dispute, settles it with a split payout, or resolve it and proceed to release. Depending on the outcome, funds are released to the seller, refunded to the buyer, or split between both, and seller payouts are subject to the platform fee.
+When a dispute is raised, the invoice moves to Disputed and the funds remain held in escrow. The intermediated platform reviews both parties’ claims and then either dismisses the dispute, settles it with a split payout, or resolve it and proceed to release. Depending on the outcome, funds are released to the seller, refunded to the buyer, or split between both, and seller payouts are subject to the platform fee.
 
-Funds remain protected in escrow throughout the process. Only the authorized third-party platform can manage finalize dispute outcomes, and the decision is communicated to both parties.
+Funds remain protected in escrow throughout the process. Only the intermediated platform can manage and finalize dispute outcomes, and the decision is communicated to both parties.
