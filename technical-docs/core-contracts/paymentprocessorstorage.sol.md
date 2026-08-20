@@ -144,6 +144,22 @@ function setPaymentValidityDuration(uint256 _newValidityDuration) external onlyO
 | :--------------------: | :-------: | :-------------------------------------------------------------------------------------------------------------: |
 | `_newValidityDuration` | `uint256` | The new payment window in seconds: how long an unpaid invoice remains payable after creation before it expires. |
 
+#### setFeeSigner
+
+Sets the key whose signature authorizes the fee receiver supplied when an invoice is accepted or paid.
+
+Callable only by the contract owner. Reverts with `InvalidFeeSigner` if `_feeSigner` is the zero address. Must be an EOA: the processors recover it with ECDSA, so it cannot be the MultiSig that owns this contract.
+
+```solidity
+function setFeeSigner(address _feeSigner) external onlyOwner;
+```
+
+**Parameters**
+
+|      Name     |   Type    |            Description            |
+| :------------: | :-------: | :--------------------------------: |
+| `_feeSigner` | `address` | The new fee signer address. |
+
 #### setIntermediatedPlatformsOperator
 
 Updates the sole platform operator wallet authorized to call privileged `IntermediatedPaymentProcessor` functions (creating invoices, triggering releases and refunds, and resolving disputes). Stored internally as `intermediatedPlatformsOperator`; emits `IntermediatedPlatformsOperatorUpdated`.
@@ -330,6 +346,20 @@ function getFeeReceiver() external view returns (address feeReceiver);
 | :-----------: | :-------: | :-----------------------: |
 | `feeReceiver` | `address` | The fee receiver address. |
 
+#### getFeeSigner
+
+Returns the key whose signature authorizes a per-invoice fee receiver.
+
+```solidity
+function getFeeSigner() external view returns (address feeSignerAddress);
+```
+
+**Returns**
+
+|       Name       |   Type    |        Description        |
+| :---------------: | :-------: | :-------------------------: |
+| `feeSignerAddress` | `address` | The fee signer address. |
+
 #### getIntermediatedPlatformsOperator
 
 Returns the address of the authorized Intermediated Platforms Operator.
@@ -422,6 +452,18 @@ event FeeReceiverUpdated(address indexed feeReceiver);
 |     Name      |   Type    |          Description          |
 | :-----------: | :-------: | :---------------------------: |
 | `feeReceiver` | `address` | The new fee receiver address. |
+
+#### FeeSignerUpdated
+
+Emitted when the fee signer is updated.
+
+```solidity
+event FeeSignerUpdated(address indexed feeSigner);
+```
+
+|    Name    |   Type    |          Description          |
+| :---------: | :-------: | :------------------------------: |
+| `feeSigner` | `address` | The new fee signer address. |
 
 #### IntermediatedPlatformsOperatorUpdated
 
@@ -537,6 +579,7 @@ event EmergencyPauserUpdated(address indexed emergencyPauser);
 |           Error            |                                           Description                                           |
 | :------------------------: | :---------------------------------------------------------------------------------------------: |
 |     `NotAuthorized()`      |           Thrown when a caller attempts an action without the required authorization.           |
+|    `InvalidFeeSigner()`    |                    Thrown when setting the fee signer to the zero address.                       |
 |     `InvalidFeeRate()`     |   Thrown when the provided fee rate exceeds the maximum allowed (10,000 basis points = 100%).   |
 |     `AlreadyPaused()`      | Thrown when pausing a system that is already paused, or that has an unresolved emergency pause. |
 |       `NotPaused()`        |                       Thrown when unpausing a system that is not paused.                        |

@@ -166,6 +166,7 @@ struct Params {
     bytes32 salt;
     IPaymentProcessorStorage.Configuration config;
     uint256 minimumInvoiceValue;
+    address weth;
     address sequencerUptimeFeed;
     address[] multiSigSigners;
     uint256 multiSigThreshold;
@@ -177,6 +178,7 @@ struct Params {
 |          `salt`          |                     `bytes32`                     |               The CREATE2 salt used for every deployment.                |
 |         `config`         | `IPaymentProcessorStorage.Configuration` |         The initial `PaymentProcessorStorage` configuration.          |
 | `minimumInvoiceValue`   |                     `uint256`                      | Minimum invoice value (in wei) for the `SimplePaymentProcessor`. |
+|          `weth`          |                     `address`                      | Wrapped native token the `SimplePaymentProcessor` pays platform fees in. |
 | `sequencerUptimeFeed`   |                     `address`                      | Chainlink sequencer uptime feed; `address(0)` disables the check. |
 |    `multiSigSigners`    |                    `address[]`                     |                     Initial `MultiSig` signers.                       |
 |   `multiSigThreshold`   |                     `uint256`                      |                Initial `MultiSig` approval threshold.                |

@@ -202,10 +202,14 @@ function createMetaInvoice(InvoiceCreationParam[] memory _param)
 
 Pays a single invoice using native ETH or an approved ERC20 token.
 
-Any caller other than the invoice's seller may pay; the payer becomes the invoice's `buyer` (there's no pre-existing buyer requirement; reverts with `BuyerCannotBeSeller` only if the caller is the seller). Use `address(0)` for native payments. Guarded by `nonReentrant`.
+Any caller other than the invoice's seller may pay; the payer becomes the invoice's `buyer` (there's no pre-existing buyer requirement; reverts with `BuyerCannotBeSeller` only if the caller is the seller). Use `address(0)` for native payments. `_feeReceiver` is recorded on the invoice and paid the platform fee on release or dispute settlement, so it must be authorized by the fee signer via `_data`: reverts with `InvalidFeeReceiver` if `_feeReceiver` is the zero address, or `InvalidFeeAuthorization` if `_data` isn't a valid signature from [`PaymentProcessorStorage`'s fee signer](paymentprocessorstorage.sol.md#setfeesigner) over this invoice and receiver (see [FeeAuthorizationLib](../library/feeauthorizationlib.sol.md)). Guarded by `nonReentrant`.
 
 ```solidity
-function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant whenNotPaused;
+function payInvoice(uint216 _invoiceId, address _paymentToken, address _feeReceiver, bytes memory _data)
+    external
+    payable
+    nonReentrant
+    whenNotPaused;
 ```
 
 **Parameters**
@@ -214,6 +218,8 @@ function payInvoice(uint216 _invoiceId, address _paymentToken) external payable 
 | :-------------: | :-------: | :-----------------------------------------------------------: |
 |   `_invoiceId`  | `uint216` |               The ID of the invoice to be paid.               |
 | `_paymentToken` | `address` | The token address used for payment (or zero address for ETH). |
+| `_feeReceiver`  | `address` |               The address to pay this invoice's platform fee to.               |
+|     `_data`     |  `bytes`  | The fee signer's 65-byte ECDSA signature over the authorization digest. |
 
 #### payMetaInvoiceWithValue
 
@@ -268,7 +274,7 @@ function createDispute(uint216 _invoiceId) external onlyIntermediatedPlatformsOp
 
 handle a dispute on a given invoice.
 
-Callable only by the intermediated platform. Must be called after a dispute is created. The resolution can be DISPUTE\_DISMISSED, or DISPUTE\_SETTLED. If settled, the seller and buyer receive a split of the funds based on sellerShare, with the seller's share subject to the platform fee rate captured on the invoice at creation (`feeRate`).
+Callable only by the intermediated platform. Must be called after a dispute is created. The resolution can be DISPUTE\_DISMISSED, or DISPUTE\_SETTLED. If settled, the seller and buyer receive a split of the funds based on sellerShare, with the seller's share subject to the platform fee rate captured on the invoice at creation (`feeRate`); the fee itself is paid to the invoice's recorded `feeReceiver`, falling back to the global fee receiver for sub-invoices.
 
 ```solidity
 function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare)
@@ -289,7 +295,7 @@ function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerSha
 
 Releases escrowed funds to the seller after the release window has passed.
 
-Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global fee rate, so a later change to the global rate never affects an already-created invoice. The invoice transitions to RELEASED and its balance is zeroed. There is no heap; this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
+Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global fee rate, so a later change to the global rate never affects an already-created invoice. The fee is paid to the fee receiver authorized when the invoice was paid (`feeReceiver`), falling back to [`PaymentProcessorStorage`'s global fee receiver](paymentprocessorstorage.sol.md#getfeereceiver) for sub-invoices paid through a meta-invoice, which carry no per-invoice fee receiver. The invoice transitions to RELEASED and its balance is zeroed. There is no heap; this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
 
 ```solidity
 function release(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator whenNotPaused;
@@ -568,6 +574,7 @@ struct Invoice {
     address seller;
     address escrow;
     address paymentToken;
+    address feeReceiver;
     uint256 amountPaid;
     uint256 price;
     uint256 balance;
@@ -590,6 +597,7 @@ struct Invoice {
 |        `seller`        | `address` |                                              Address of the seller.                                                      |
 |        `escrow`        | `address` |                              Address of the escrow contract holding the funds.                                           |
 |      `paymentToken`    | `address` |                       Token used for payment. Address zero for native currency.                                         |
+|      `feeReceiver`     | `address` | Address that receives the platform fee for this invoice, authorized by the fee signer when the buyer paid. Zero for sub-invoices paid as part of a meta-invoice. |
 |      `amountPaid`      | `uint256` |            Total amount paid by the buyer for this invoice, in the payment token (native token if `paymentToken == address(0)`).       |
 |         `price`        | `uint256` |                                    Invoice amount expressed in USD (8 decimals).                                         |
 |        `balance`       | `uint256` |             Current balance of the escrow associated with the order, accounting for total amount paid minus refunds or releases.        |
@@ -628,7 +636,7 @@ struct InvoiceCreationParam {
 |     `invoiceId`     |  `string` |             A unique string identifier for the invoice, provided by the caller and hashed for use in the contract.   |
 |       `seller`      | `address` |                                          Address of the seller.                                          |
 |       `price`       | `uint256` |                     Price or amount to be paid for the invoice in USD (8 decimals).                     |
-| `escrowHoldPeriod`  |  `uint32` |            Duration (in seconds) that the escrow will lock the payment before it's releasable.          |
+| `escrowHoldPeriod`  |  `uint32` |            Duration (in seconds) that the escrow will lock the payment before it's releasable. Must be non-zero; reverts `HoldPeriodCanNotBeZero` otherwise.          |
 
 ### Events
 
@@ -663,7 +671,14 @@ event MetaInvoiceCreated(uint216 indexed metaInvoiceId, uint256 indexed totalPri
 Emitted when an invoice is successfully paid and an escrow contract is created.
 
 ```solidity
-event InvoicePaid(uint216 indexed invoiceId, address paymentToken, address escrowAddress, uint256 amount, uint40 releaseAt);
+event InvoicePaid(
+    uint216 indexed invoiceId,
+    address paymentToken,
+    address escrowAddress,
+    uint256 amount,
+    uint40 releaseAt,
+    address feeReceiver
+);
 ```
 
 | Name            | Type      | Description                                                              |
@@ -673,6 +688,7 @@ event InvoicePaid(uint216 indexed invoiceId, address paymentToken, address escro
 | `escrowAddress` | `address` | The address of the escrow contract created to hold the payment.          |
 | `amount`        | `uint256` | The amount paid, denominated in the token's smallest unit.               |
 | `releaseAt`     | `uint40`  | The UNIX timestamp when the escrowed funds become releasable.            |
+| `feeReceiver`   | `address` | The address recorded to be paid this invoice's platform fee. Zero for a sub-invoice paid through a meta-invoice, which falls back to the global fee receiver. |
 
 #### PaymentReleased
 
@@ -836,6 +852,9 @@ event OracleUpdated(address indexed previousOracle, address indexed newOracle);
 | `NotAuthorized()` | Thrown when the caller lacks the required role or permission. |
 | `InvoiceAlreadyExists()` | Thrown when trying to create an invoice that already exists. |
 | `PriceCannotBeZero()` | Thrown when an attempt is made to create an invoice with a price of zero. |
+| `HoldPeriodCanNotBeZero()` | Thrown when an invoice is created with a zero escrow hold period. |
+| `InvalidFeeAuthorization()` | Thrown when the fee receiver is not authorized by a signature from the configured fee signer. |
+| `InvalidFeeReceiver()` | Thrown when the zero address is supplied as the fee receiver. |
 | `BuyerCannotBeSeller()` | Thrown if the buyer and seller are the same address. |
 | `InvalidInvoiceState()` | Thrown when the invoice is in a state that does not allow the attempted action. |
 | `InvoiceDoesNotExist()` | Thrown when the invoice does not exist. |

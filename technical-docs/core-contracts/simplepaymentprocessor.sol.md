@@ -119,18 +119,31 @@ Reference to the external Payment Processor storage contract.
 IPaymentProcessorStorage public immutable ppStorage
 ```
 
+#### weth
+
+Wrapped native token the platform fee is paid in. See [release](#release).
+
+```solidity
+IWETH public immutable weth
+```
+
 ### Functions
 
 #### constructor
 
-Initializes the payment processor with its storage and notes contract references.
+Initializes the payment processor with its storage, notes, and WETH contract references.
 
-Sets `ppStorage` and `notes`, initializes `decisionWindow` to `SELLER_DEFAULT_DECISION_WINDOW`, and assigns `minimumInvoiceValue` directly. Fee rate and fee receiver live in `ppStorage`, not here.
+Sets `ppStorage`, `notes`, and `weth`, initializes `decisionWindow` to `SELLER_DEFAULT_DECISION_WINDOW`, and assigns `minimumInvoiceValue` directly. Fee rate and fee receiver live in `ppStorage`, not here.
 
 The minimum invoice value is assigned directly rather than via `setMinimumInvoiceValue`: this contract is deployed (via `MasterDeployer`) against a predicted storage address before `PaymentProcessorStorage` actually exists, so the setter's `onlyAuthorized` check, which calls into `ppStorage`, would revert at construction time.
 
 ```solidity
-constructor(address _paymentProcessorStorageAddress, uint256 _minimumInvoicePrice, address _notesAddress);
+constructor(
+    address _paymentProcessorStorageAddress,
+    uint256 _minimumInvoicePrice,
+    address _notesAddress,
+    address _wethAddress
+);
 ```
 
 **Parameters**
@@ -140,6 +153,17 @@ constructor(address _paymentProcessorStorageAddress, uint256 _minimumInvoicePric
 | `_paymentProcessorStorageAddress` | `address` | The address of the shared payment processor storage contract. |
 |      `_minimumInvoicePrice`       | `uint256` |    The new minimum default invoice value to set (in wei).     |
 |          `_notesAddress`          | `address` |     Address of the notes contract used for invoice notes.     |
+|          `_wethAddress`           | `address` |     Address of the wrapped native token the platform fee is paid in.     |
+
+#### receive
+
+Accepts the native fee pulled out of an escrow on its way to being wrapped into WETH.
+
+Reverts with `UnexpectedNativeTransfer` for any other incoming transfer, so native currency cannot be stranded on this contract; only accepts value while a fee is in flight during [`release`](#release) or the automated release path.
+
+```solidity
+receive() external payable;
+```
 
 #### createInvoice
 
@@ -199,17 +223,19 @@ function pay(uint216 _invoiceId, bytes memory _storageRef, bool _share)
 
 Marks the specified invoice as accepted.
 
-This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event. Only callable by the invoice's seller, and only while the invoice is `PAID` and within the acceptance window; reverts with `AcceptanceWindowExceeded` once that window has passed. `releaseAt` is set to `block.timestamp + holdPeriod`, using the hold period fixed on the invoice at creation, and the heap entry is rescheduled accordingly.
+This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event. Only callable by the invoice's seller, and only while the invoice is `PAID` and within the acceptance window; reverts with `AcceptanceWindowExceeded` once that window has passed. `releaseAt` is set to `block.timestamp + holdPeriod`, using the hold period fixed on the invoice at creation, and the heap entry is rescheduled accordingly. `_feeReceiver` is recorded on the invoice and paid the platform fee on release, so it must be authorized by the fee signer via `_data`: reverts with `InvalidFeeReceiver` if `_feeReceiver` is the zero address, or `InvalidFeeAuthorization` if `_data` isn't a valid signature from [`PaymentProcessorStorage`'s fee signer](paymentprocessorstorage.sol.md#setfeesigner) over this invoice and receiver (see [FeeAuthorizationLib](../library/feeauthorizationlib.sol.md)).
 
 ```solidity
-function acceptPayment(uint216 _invoiceId) public whenNotPaused;
+function acceptPayment(uint216 _invoiceId, address _feeReceiver, bytes memory _data) public whenNotPaused;
 ```
 
 **Parameters**
 
-|     Name     |   Type    |              Description               |
-| :----------: | :-------: | :------------------------------------: |
-| `_invoiceId` | `uint216` | The key of the invoice being accepted. |
+|      Name      |   Type    |                              Description                              |
+| :-------------: | :-------: | :----------------------------------------------------------------------: |
+|  `_invoiceId`  | `uint216` |                  The key of the invoice being accepted.                  |
+| `_feeReceiver` | `address` |                The address to pay this invoice's platform fee to.        |
+|     `_data`    |  `bytes`  | The fee signer's 65-byte ECDSA signature over the authorization digest. |
 
 #### rejectPayment
 
@@ -247,7 +273,7 @@ function cancelInvoice(uint216 _invoiceId) external;
 
 Releases the funds held in escrow for a specific invoice to the seller.
 
-Only callable by the seller. Invoice must be in `ACCEPTED` state (reverts `InvalidInvoiceState` otherwise) and `releaseAt` must have passed (reverts `HoldPeriodHasNotBeenExceeded` otherwise). Deducts the platform fee before transferring the net amount to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global rate, so a later change to the global rate never affects an already-created invoice.
+Only callable by the seller. Invoice must be in `ACCEPTED` state (reverts `InvalidInvoiceState` otherwise) and `releaseAt` must have passed (reverts `HoldPeriodHasNotBeenExceeded` otherwise). Deducts the platform fee before transferring the net amount to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global rate, so a later change to the global rate never affects an already-created invoice. The seller is paid in native currency; the fee is pulled from escrow as native currency, wrapped into `weth`, and sent to the fee receiver as WETH, so a receiver that rejects native transfers is still paid. The fee receiver is the one authorized at acceptance (`feeReceiver`), falling back to [`PaymentProcessorStorage`'s global fee receiver](paymentprocessorstorage.sol.md#getfeereceiver) for invoices accepted before this feature existed.
 
 ```solidity
 function release(uint216 _invoiceId) public whenNotPaused;
@@ -482,6 +508,7 @@ struct Invoice {
     address seller;
     address buyer;
     address escrow;
+    address feeReceiver;
     uint256 price;
     uint256 balance;
 }
@@ -502,6 +529,7 @@ struct Invoice {
 |      `seller`       | `address` |                                                                    The address of the seller of the invoice.                                                                     |
 |       `buyer`       | `address` |                                                                     The address of the buyer of the invoice.                                                                     |
 |      `escrow`       | `address` |                                                     The address of the escrow contract managing the funds for this invoice.                                                      |
+|    `feeReceiver`    | `address` |                          Address that receives the platform fee for this invoice, authorized by the fee signer when the seller accepted the payment.                            |
 |       `price`       | `uint256` |                                                                      The total price of the invoice in wei.                                                                      |
 |      `balance`      | `uint256` |                                    The current amount held in escrow, net of any fees deducted upon acceptance. Zeroed on release or refund.                                     |
 
@@ -566,12 +594,13 @@ event InvoiceRefunded(uint216 indexed invoiceId, uint256 amount);
 Emitted when an invoice is accepted by the seller.
 
 ```solidity
-event InvoiceAccepted(uint216 indexed invoiceId);
+event InvoiceAccepted(uint216 indexed invoiceId, address indexed feeReceiver);
 ```
 
-|    Name     |   Type    |              Description               |
-| :---------: | :-------: | :------------------------------------: |
-| `invoiceId` | `uint216` | The unique ID of the accepted invoice. |
+|    Name     |   Type    |                        Description                        |
+| :---------: | :-------: | :---------------------------------------------------------: |
+| `invoiceId` | `uint216` |             The unique ID of the accepted invoice.           |
+| `feeReceiver` | `address` | The address recorded to be paid this invoice's platform fee on release. |
 
 #### InvoiceCanceled
 
@@ -669,5 +698,8 @@ event PaymentBurned(uint216 indexed invoiceId, uint256 amount);
 |              `SellerCannotPayOwnedInvoice()`               |                 Thrown when the seller of an invoice attempts to pay for their own invoice.                 |
 |              `InvoiceNotEligibleForRefund()`               | Thrown when a refund to the buyer cannot be issued (invoice not `PAID` or decision window not yet elapsed). |
 |              `HoldPeriodHasNotBeenExceeded()`              |                    Thrown when the hold period for an invoice has not yet been exceeded.                    |
+|                `InvalidFeeAuthorization()`                 |         Thrown when the fee receiver is not authorized by a signature from the configured fee signer.        |
+|                   `InvalidFeeReceiver()`                   |                       Thrown when the zero address is supplied as the fee receiver.                          |
+|               `UnexpectedNativeTransfer()`                 |         Thrown when native currency is sent to the processor outside of a fee being wrapped into WETH.       |
 |                  `EscrowWithdrawFailed()`                  |             Thrown when the escrow withdrawal fails during a manual release, reject, or refund.             |
 |                     `ContractPaused()`                     |                 Thrown when a value-moving entrypoint is called while the system is paused.                 |
