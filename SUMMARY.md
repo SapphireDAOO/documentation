@@ -29,6 +29,7 @@
   * [OracleManager.sol](technical-docs/core-contracts/oraclemanager.sol.md)
   * [MultiSig.sol](technical-docs/core-contracts/multisig.sol.md)
   * [MasterDeployer.sol](technical-docs/core-contracts/masterdeployer.sol.md)
+  * [Sweeper.sol](technical-docs/core-contracts/sweeper.sol.md)
 * [Library](technical-docs/library/README.md)
   * [TaskQueueLib.sol](technical-docs/library/taskqueuelib.sol.md)
   * [FeeAuthorizationLib.sol](technical-docs/library/feeauthorizationlib.sol.md)
