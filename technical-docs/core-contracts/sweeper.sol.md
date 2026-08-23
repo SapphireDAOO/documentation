@@ -4,6 +4,8 @@ Collects ERC20 tokens held by many addresses into a single destination in one tr
 
 Deployed standalone, independently of [MasterDeployer](masterdeployer.sol.md); it only needs the shared `PaymentProcessorStorage` address to know who its owner is.
 
+The holders it sweeps from are typically per-invoice stealth addresses that pre-approved it via an EIP-7702 delegation; see [Fee Receiver Privacy](../fee-receiver-privacy.md) for the full design.
+
 You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/Sweeper.sol)
 
 ### State Variables

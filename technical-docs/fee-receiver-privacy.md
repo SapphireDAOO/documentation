@@ -1,0 +1,10 @@
+# Fee Receiver Privacy
+
+Each invoice's platform fee is paid to a receiver unique to that invoice, rather than always to the same treasury address. Reusing one address for every fee payout would let anyone watching the chain link the full history and volume of platform fees to a single, publicly known account. SapphireDAO avoids that by generating a fresh receiver per invoice and only reconciling the collected funds into the treasury later, in a batch.
+
+This is built from four pieces:
+
+1. **Stealth address generation ([EIP-5564](https://eips.ethereum.org/EIPS/eip-5564))**: Off-chain, a new stealth address is derived for each invoice from the treasury's spending key. Only the treasury can recognize and later control funds sent to that address; on-chain, it's indistinguishable from any other EOA.
+2. **Authorization ([FeeAuthorizationLib](library/feeauthorizationlib.sol.md))**: The stealth address is submitted as `_feeReceiver` when a buyer pays (or a seller accepts), signed off by the configured fee signer so a processor can't be tricked into recording an unauthorized receiver. See [SimplePaymentProcessor.acceptPayment](core-contracts/simplepaymentprocessor.sol.md#acceptpayment) and [IntermediatedPaymentProcessor.payInvoice](core-contracts/intermediatedpaymentprocessor.sol.md#payinvoice).
+3. **Delegated approval ([EIP-7702](https://eips.ethereum.org/EIPS/eip-7702))**: A stealth address holds no ETH to pay for gas, so it can't submit its own `approve` transaction once it receives a fee. EIP-7702 lets it delegate execution to a contract in a single signed authorization, so a sponsor can set the ERC20 approval on the stealth address's behalf ahead of time, without the stealth address ever needing to be funded.
+4. **Collection ([Sweeper.sol](core-contracts/sweeper.sol.md))**: Once many stealth addresses hold approved fee balances, the `PaymentProcessorStorage` owner calls `Sweeper.sweep` to pull them all into the treasury in a single transaction, using the approvals set in step 3.

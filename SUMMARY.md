@@ -33,6 +33,7 @@
 * [Library](technical-docs/library/README.md)
   * [TaskQueueLib.sol](technical-docs/library/taskqueuelib.sol.md)
   * [FeeAuthorizationLib.sol](technical-docs/library/feeauthorizationlib.sol.md)
+* [Fee Receiver Privacy](technical-docs/fee-receiver-privacy.md)
 * [API communication](technical-docs/api-communication.md)
 * [Data Indexing](technical-docs/data-indexing.md)
 * [Recurring Costs](technical-docs/recurring-costs.md)

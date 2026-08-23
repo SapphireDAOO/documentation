@@ -4,6 +4,8 @@ FeeAuthorizationLib verifies that a per-invoice fee receiver was authorized by t
 
 The signed message is an EIP-191 `personal_sign` digest over the processor address, the chain id, the invoice ID, and the fee receiver, so a signature is bound to one invoice on one processor on one chain. Invoices only accept a fee receiver once, in a state transition that cannot be repeated, so no separate nonce or deadline is required.
 
+For why the fee receiver is unique per invoice rather than a fixed treasury address, see [Fee Receiver Privacy](../fee-receiver-privacy.md).
+
 You can find the full implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/libraries/FeeAuthorizationLib.sol)
 
 ### Functions
