@@ -223,7 +223,7 @@ function pay(uint216 _invoiceId, bytes memory _storageRef, bool _share)
 
 Marks the specified invoice as accepted.
 
-This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event. Only callable by the invoice's seller, and only while the invoice is `PAID` and within the acceptance window; reverts with `AcceptanceWindowExceeded` once that window has passed. `releaseAt` is set to `block.timestamp + holdPeriod`, using the hold period fixed on the invoice at creation, and the heap entry is rescheduled accordingly. `_feeReceiver` is recorded on the invoice and paid the platform fee on release, so it must be authorized by the fee signer via `_data`: reverts with `InvalidFeeReceiver` if `_feeReceiver` is the zero address, or `InvalidFeeAuthorization` if `_data` isn't a valid signature from [`PaymentProcessorStorage`'s fee signer](paymentprocessorstorage.sol.md#setfeesigner) over this invoice and receiver (see [FeeAuthorizationLib](../library/feeauthorizationlib.sol.md)).
+This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event, carrying the computed `releaseAt`. Only callable by the invoice's seller, and only while the invoice is `PAID` and within the acceptance window; reverts with `AcceptanceWindowExceeded` once that window has passed. `releaseAt` is set to `block.timestamp + escrowHoldPeriod`, using the hold period fixed on the invoice at creation, and the heap entry is rescheduled from `sellerActionDeadline` to `releaseAt`. `_feeReceiver` is recorded on the invoice and paid the platform fee on release, so it must be authorized by the fee signer via `_data`: reverts with `InvalidFeeReceiver` if `_feeReceiver` is the zero address, or `InvalidFeeAuthorization` if `_data` isn't a valid signature from [`PaymentProcessorStorage`'s fee signer](paymentprocessorstorage.sol.md#setfeesigner) over this invoice and receiver (see [FeeAuthorizationLib](../library/feeauthorizationlib.sol.md)).
 
 ```solidity
 function acceptPayment(uint216 _invoiceId, address _feeReceiver, bytes memory _data) public whenNotPaused;
@@ -499,9 +499,9 @@ struct Invoice {
     uint40 createdAt;
     uint40 paidAt;
     uint40 releaseAt;
-    uint40 invalidateAt;
     uint40 expiresAt;
-    uint32 holdPeriod;
+    uint40 sellerActionDeadline;
+    uint32 escrowHoldPeriod;
     uint8 state;
     uint8 withdrawalRetries;
     uint16 feeRate;
@@ -514,16 +514,16 @@ struct Invoice {
 }
 ```
 
-|        Field        |   Type    |                                                                                   Description                                                                                    |
-| :-----------------: | :-------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-|   `invoiceNonce`    | `uint216` |                                                      A unique identifier assigned to this invoice, typically sequentially.                                                       |
-|     `createdAt`     | `uint40`  |                                                                 The Unix timestamp when the invoice was created.                                                                 |
-|      `paidAt`       | `uint40`  |                                                                The Unix timestamp when the payment was completed.                                                                |
-|     `releaseAt`     | `uint40`  |                                                        The timestamp when funds in escrow can be released to the seller.                                                         |
-|   `invalidateAt`    | `uint40`  |                                                      The timestamp after which the invoice is considered invalid if unpaid.                                                      |
-|     `expiresAt`     | `uint40`  |                                    The timestamp after which the seller can no longer take action (accept/reject), and the buyer is refunded.                                    |
-|    `holdPeriod`     | `uint32`  |           Escrow hold duration (in seconds) set by the seller at creation, counted from acceptance. `0` means funds are releasable as soon as the payment is accepted.           |
-|       `state`       |  `uint8`  |                                                                        The current state of the invoice.                                                                         |
+|         Field          |   Type    |                                                                                   Description                                                                                    |
+| :---------------------: | :-------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+|     `invoiceNonce`     | `uint216` |                                                      A unique identifier assigned to this invoice, typically sequentially.                                                       |
+|       `createdAt`      | `uint40`  |                                                                 The Unix timestamp when the invoice was created.                                                                 |
+|        `paidAt`        | `uint40`  |                                                                The Unix timestamp when the payment was completed.                                                                |
+|       `releaseAt`      | `uint40`  |                                                        The timestamp when funds in escrow can be released to the seller.                                                         |
+|       `expiresAt`      | `uint40`  |                                                            The timestamp after which the invoice can no longer be paid.                                                          |
+| `sellerActionDeadline` | `uint40`  |                                    The timestamp after which the seller can no longer take action (accept/reject), and the buyer is refunded.                                    |
+|   `escrowHoldPeriod`   | `uint32`  |           Escrow hold duration (in seconds) set by the seller at creation, counted from acceptance. `0` means funds are releasable as soon as the payment is accepted.           |
+|         `state`        |  `uint8`  |                                                                        The current state of the invoice.                                                                         |
 | `withdrawalRetries` |  `uint8`  |                                Number of failed `IEscrow.withdraw` attempts by the automation path. Packed with `state` in the same storage slot.                                |
 |      `feeRate`      | `uint16`  | The platform fee rate (in basis points) captured at invoice creation. Releases always charge this rate, so later changes to the global fee rate do not affect existing invoices. |
 |      `seller`       | `address` |                                                                    The address of the seller of the invoice.                                                                     |
@@ -553,15 +553,17 @@ event InvoiceCreated(uint216 indexed invoiceId, Invoice invoice);
 Emitted when an invoice payment is made.
 
 ```solidity
-event InvoicePaid(uint216 indexed invoiceId, address indexed buyer, uint256 indexed amountPaid, uint40 expiresAt);
+event InvoicePaid(
+    uint216 indexed invoiceId, address indexed buyer, uint256 indexed amountPaid, uint40 sellerActionDeadline
+);
 ```
 
-|     Name     |   Type    |                                              Description                                              |
-| :----------: | :-------: | :---------------------------------------------------------------------------------------------------: |
-| `invoiceId`  | `uint216` |                                  The unique ID of the paid invoice.                                   |
-|   `buyer`    | `address` |                                  The address of the buyer who paid.                                   |
-| `amountPaid` | `uint256` |                              The amount paid towards the invoice in wei.                              |
-| `expiresAt`  | `uint40`  | The timestamp by which the seller must accept or reject; after this the buyer is eligible for refund. |
+|         Name          |   Type    |                                              Description                                              |
+| :--------------------: | :-------: | :---------------------------------------------------------------------------------------------------: |
+|      `invoiceId`      | `uint216` |                                  The unique ID of the paid invoice.                                   |
+|        `buyer`        | `address` |                                  The address of the buyer who paid.                                   |
+|      `amountPaid`     | `uint256` |                              The amount paid towards the invoice in wei.                              |
+| `sellerActionDeadline` | `uint40`  | The timestamp by which the seller must accept or reject; after this the buyer is eligible for refund. |
 
 #### InvoiceRejected
 
@@ -594,13 +596,14 @@ event InvoiceRefunded(uint216 indexed invoiceId, uint256 amount);
 Emitted when an invoice is accepted by the seller.
 
 ```solidity
-event InvoiceAccepted(uint216 indexed invoiceId, address indexed feeReceiver);
+event InvoiceAccepted(uint216 indexed invoiceId, address indexed feeReceiver, uint40 releaseAt);
 ```
 
 |    Name     |   Type    |                        Description                        |
 | :---------: | :-------: | :---------------------------------------------------------: |
 | `invoiceId` | `uint216` |             The unique ID of the accepted invoice.           |
 | `feeReceiver` | `address` | The address recorded to be paid this invoice's platform fee on release. |
+| `releaseAt` | `uint40`  | The timestamp when the escrowed funds become releasable to the seller. |
 
 #### InvoiceCanceled
 

@@ -1,6 +1,6 @@
 # MasterDeployer.sol
 
-Deploys the full payment processor system (`MultiSig`, `Notes`, `SimplePaymentProcessor`, [PaymentAutomation.sol](paymentautomation.sol.md), `OracleManager`, `IntermediatedPaymentProcessor`, and finally [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md)) deterministically via CREATE2, in a single transaction.
+Deploys the full payment processor system (`MultiSig`, `Notes`, `SimplePaymentProcessor`, [PaymentAutomation.sol](paymentautomation.sol.md), `OracleManager`, `IntermediatedPaymentProcessor`, [Sweeper.sol](sweeper.sol.md), and finally [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md)) deterministically via CREATE2, in a single transaction.
 
 The key trick: `PaymentProcessorStorage`'s constructor needs to know which processor addresses to authorize, but those processors don't exist until *after* they're deployed, and `PaymentProcessorStorage`'s own address needs to be predictable *before* it's deployed (so the processors can be pointed at it). `MasterDeployer` solves this by implementing `IAuthorizedAddressProvider`: `PaymentProcessorStorage`'s constructor calls back into its deployer (`msg.sender`, i.e. this contract) to fetch the list of addresses to authorize, rather than taking that list as a constructor argument. Keeping the authorized-address list out of the constructor args keeps it out of the CREATE2 init code, so `PaymentProcessorStorage`'s address depends only on its `Configuration` struct (and creation code) and can be predicted (via `predictStorageAddress`) before the processors exist. Authorization is fixed at that one deployment-time callback and can never be changed afterward; there is no setter.
 
@@ -74,6 +74,14 @@ The deployed `IntermediatedPaymentProcessor` contract.
 IntermediatedPaymentProcessor public intermediatedPaymentProcessor
 ```
 
+#### sweeper
+
+The deployed `Sweeper` contract.
+
+```solidity
+Sweeper public sweeper
+```
+
 ### Functions
 
 #### constructor
@@ -132,9 +140,9 @@ function predictStorageAddress(
 
 #### deployAll
 
-Deploys the full system in one transaction: `MultiSig`, `Notes`, `SimplePaymentProcessor`, `PaymentAutomation`, `OracleManager`, `IntermediatedPaymentProcessor`, and finally `PaymentProcessorStorage` at its predicted address with both processors authorized.
+Deploys the full system in one transaction: `MultiSig`, `Notes`, `SimplePaymentProcessor`, `PaymentAutomation`, `OracleManager`, `IntermediatedPaymentProcessor`, `Sweeper`, and finally `PaymentProcessorStorage` at its predicted address with both processors authorized.
 
-Callable once, by `deployer` only (reverts with `NotDeployer` otherwise; reverts with `AlreadyDeployed` if `ppStorage` is already set). All child contracts are deployed via `Create2.deploy` using the same `_params.salt`, with each contract's creation code (from `_initCodes`) packed together with its ABI-encoded constructor arguments. `SimplePaymentProcessor` and `IntermediatedPaymentProcessor` are pushed onto the pending-authorized list before `PaymentProcessorStorage` is deployed; that list is deleted immediately after, so `authorizedAddresses()` only ever returns a non-empty list during this call. Reverts with `StorageAddressMismatch` if the deployed storage address doesn't match the prediction. Ownership of the storage contract is left with `_params.config.owner`; post-deploy wiring (notes authorization, registering the automation adapter on the Simple processor via `setAutomation`, price feeds, ownership transfer to the `MultiSig`) is the deployer's responsibility, not something this function does.
+Callable once, by `deployer` only (reverts with `NotDeployer` otherwise; reverts with `AlreadyDeployed` if `ppStorage` is already set). All child contracts are deployed via `Create2.deploy` using the same `_params.salt`, with each contract's creation code (from `_initCodes`) packed together with its ABI-encoded constructor arguments. `Sweeper` takes only the predicted `PaymentProcessorStorage` address as its constructor argument. `SimplePaymentProcessor` and `IntermediatedPaymentProcessor` are pushed onto the pending-authorized list before `PaymentProcessorStorage` is deployed; that list is deleted immediately after, so `authorizedAddresses()` only ever returns a non-empty list during this call (`Sweeper` is never added to it; it authorizes callers by checking `PaymentProcessorStorage`'s owner directly, not the `onlyAuthorized` allowlist). Reverts with `StorageAddressMismatch` if the deployed storage address doesn't match the prediction. Ownership of the storage contract is left with `_params.config.owner`; post-deploy wiring (notes authorization, registering the automation adapter on the Simple processor via `setAutomation`, setting the fee signer, price feeds, ownership transfer to the `MultiSig`) is the deployer's responsibility, not something this function does.
 
 ```solidity
 function deployAll(Params calldata _params, InitCodes calldata _initCodes)
@@ -195,6 +203,7 @@ struct InitCodes {
     bytes paymentAutomation;
     bytes oracleManager;
     bytes intermediatedPaymentProcessor;
+    bytes sweeper;
     bytes ppStorage;
 }
 ```
@@ -207,6 +216,7 @@ struct InitCodes {
 |       `paymentAutomation`       | `bytes` |       `PaymentAutomation` creation code.       |
 |          `oracleManager`          | `bytes` |          `OracleManager` creation code.           |
 | `intermediatedPaymentProcessor` | `bytes` | `IntermediatedPaymentProcessor` creation code. |
+|             `sweeper`             | `bytes` |              `Sweeper` creation code.             |
 |            `ppStorage`            | `bytes` |     `PaymentProcessorStorage` creation code.      |
 
 ### Events
@@ -223,7 +233,8 @@ event SystemDeployed(
     address simplePaymentProcessor,
     address paymentAutomation,
     address oracleManager,
-    address intermediatedPaymentProcessor
+    address intermediatedPaymentProcessor,
+    address sweeper
 );
 ```
 
@@ -236,6 +247,7 @@ event SystemDeployed(
 |       `paymentAutomation`       | `address` |    The deployed `PaymentAutomation` adapter address.   |
 |         `oracleManager`         | `address` |       The deployed `OracleManager` address.       |
 | `intermediatedPaymentProcessor` | `address` | The deployed `IntermediatedPaymentProcessor` address. |
+|             `sweeper`            | `address` |            The deployed `Sweeper` address.            |
 
 ### Errors
 

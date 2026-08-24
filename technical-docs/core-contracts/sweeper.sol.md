@@ -2,7 +2,7 @@
 
 Collects ERC20 tokens held by many addresses into a single destination in one transaction. Moves tokens with `transferFrom`, so each holder must have approved this contract first; the sweeper can never take more than a holder allowed. The destination is chosen per call, so only the [PaymentProcessorStorage](paymentprocessorstorage.sol.md) owner may sweep: any other caller could otherwise send approved balances to themselves.
 
-Deployed standalone, independently of [MasterDeployer](masterdeployer.sol.md); it only needs the shared `PaymentProcessorStorage` address to know who its owner is.
+Deployed by [MasterDeployer](masterdeployer.sol.md#deployall) alongside the rest of the system, against the predicted `PaymentProcessorStorage` address; it only needs that address to know who its owner is.
 
 The holders it sweeps from are typically per-invoice stealth addresses that pre-approved it via an EIP-7702 delegation; see [Fee Receiver Privacy](../fee-receiver-privacy.md) for the full design.
 
