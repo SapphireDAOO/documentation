@@ -6,7 +6,7 @@ This API provides HTTP endpoints for interacting with the Sapphire DAO's [Interm
 
 Contract addresses and endpoints are not compiled in; they come from a `config.yaml` holding one section per network (`local`, `testnet`, `mainnet`), selected by the `NETWORK` environment variable at startup.
 
-**Base URL**: `https://pp-api.serveftp.com/`
+**Base URL**: `https://sapphiredaotesting.com/`
 
 ### Endpoints
 
@@ -131,7 +131,7 @@ Every endpoint except `GET /` requires an `X-API-KEY` header, enforced by `Acces
 **Example**:
 
 ```bash
-curl -X POST https://pp-api.serveftp.com/v1/invoices \
+curl -X POST https://sapphiredaotesting.com/v1/invoices \
 -H "Content-Type: application/json" \
 -H "X-API-KEY: YOUR_API_KEY_HERE" \
 -d '[
@@ -167,7 +167,7 @@ curl -X POST https://pp-api.serveftp.com/v1/invoices \
 **Example**:
 
 ```bash
-curl https://pp-api.serveftp.com/v1/invoices/59808737901387817475691215581034097896123425895641016234844280889 \
+curl https://sapphiredaotesting.com/v1/invoices/59808737901387817475691215581034097896123425895641016234844280889 \
 -H "X-API-KEY: YOUR_API_KEY_HERE"
 ```
 
@@ -201,7 +201,7 @@ curl https://pp-api.serveftp.com/v1/invoices/59808737901387817475691215581034097
 **Example**:
 
 ```bash
-curl -X POST https://pp-api.serveftp.com/v1/invoices/59808737901387817475691215581034097896123425895641016234844280889/release \
+curl -X POST https://sapphiredaotesting.com/v1/invoices/59808737901387817475691215581034097896123425895641016234844280889/release \
 -H "X-API-KEY: YOUR_API_KEY_HERE"
 ```
 
@@ -226,7 +226,7 @@ curl -X POST https://pp-api.serveftp.com/v1/invoices/598087379013878174756912155
 **Example**:
 
 ```bash
-curl -X POST https://pp-api.serveftp.com/v1/invoices/59808737901387817475691215581034097896123425895641016234844280889/cancel \
+curl -X POST https://sapphiredaotesting.com/v1/invoices/59808737901387817475691215581034097896123425895641016234844280889/cancel \
 -H "X-API-KEY: YOUR_API_KEY_HERE"
 ```
 
@@ -269,7 +269,7 @@ curl -X POST https://pp-api.serveftp.com/v1/invoices/598087379013878174756912155
 **Example**:
 
 ```bash
-curl -X POST https://pp-api.serveftp.com/v1/invoices/59808737901387817475691215581034097896123425895641016234844280889/refund \
+curl -X POST https://sapphiredaotesting.com/v1/invoices/59808737901387817475691215581034097896123425895641016234844280889/refund \
 -H "Content-Type: application/json" \
 -H "X-API-KEY: YOUR_API_KEY_HERE" \
 -d '{ "refundShare": "5000" }'
@@ -296,7 +296,7 @@ curl -X POST https://pp-api.serveftp.com/v1/invoices/598087379013878174756912155
 **Example**:
 
 ```bash
-curl -X POST https://pp-api.serveftp.com/v1/invoices/59808737901387817475691215581034097896123425895641016234844280889/disputes \
+curl -X POST https://sapphiredaotesting.com/v1/invoices/59808737901387817475691215581034097896123425895641016234844280889/disputes \
 -H "X-API-KEY: YOUR_API_KEY_HERE"
 ```
 
@@ -350,7 +350,7 @@ curl -X POST https://pp-api.serveftp.com/v1/invoices/598087379013878174756912155
 **Example**:
 
 ```bash
-curl -X POST https://pp-api.serveftp.com/v1/invoices/59808737901387817475691215581034097896123425895641016234844280889/disputes/resolution \
+curl -X POST https://sapphiredaotesting.com/v1/invoices/59808737901387817475691215581034097896123425895641016234844280889/disputes/resolution \
 -H "Content-Type: application/json" \
 -H "X-API-KEY: YOUR_API_KEY_HERE" \
 -d '{ "resolution": 2, "sellerShare": "9000" }'
@@ -405,7 +405,7 @@ curl -X POST https://pp-api.serveftp.com/v1/invoices/598087379013878174756912155
 **Example**:
 
 ```bash
-curl "https://pp-api.serveftp.com/v1/exchangeRate?From=USD&to=ETH&to=wBTC" \
+curl "https://sapphiredaotesting.com/v1/exchangeRate?From=USD&to=ETH&to=wBTC" \
 -H "X-API-KEY: YOUR_API_KEY_HERE"
 ```
 
