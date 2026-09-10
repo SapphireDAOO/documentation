@@ -28,4 +28,13 @@ Once the number of approvals reaches the configured threshold, usually the major
 3. **Approve or cancel.** The other admins see the notification and open the transaction to review it. Each one either approves it, adding their approval to the count, or, if they disagree with the change, proposes a cancellation of that same transaction instead.
 4. **Execute.** Once approvals reach the threshold, usually a majority of admins, the transaction is Approved and any admin can execute it. Executing runs the underlying call, the new address becomes an admin, and the transaction is marked Executed. If a cancellation was proposed and reaches the threshold first, the original add-admin transaction is Canceled instead, and the new address is never added.
 
-For the underlying contract mechanics, function signatures, and events, see [MultiSig.sol](../technical-docs/core-contracts/multisig.sol.md).
+### Example: emergency pause
+
+Emergency pause exists for when something looks wrong and not enough admins are available to move a normal multisig transaction through in time.
+
+1. **Trigger.** A single trusted address, not the multisig, halts the system immediately: every value-moving action on both payment processors stops. No proposal or approval is needed for this step.
+2. **24-hour window.** The pause holds for 24 hours on its own. If nothing else happens, it lapses automatically and the system resumes.
+3. **Make it permanent.** If the admins agree the pause should stay in place, they confirm it through the multisig, the same propose, notify, approve, execute flow as any other admin action, before the 24 hours run out. Once approved and executed, the pause no longer expires; it stays in effect until the admins explicitly unpause the system through the multisig.
+4. **Direct pause.** The admins don't need an emergency to pause the system. The multisig can pause it directly at any time through the normal propose, approve, execute flow, without ever going through the emergency pause mechanism.
+
+For the underlying contract mechanics, function signatures, and events, see [MultiSig.sol](../technical-docs/core-contracts/multisig.sol.md) and [PaymentProcessorStorage.sol](../technical-docs/core-contracts/paymentprocessorstorage.sol.md#pause).
