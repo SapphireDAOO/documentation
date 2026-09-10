@@ -15,6 +15,7 @@
 * [Handle Disputes](how-to-guide/handle-disputes.md)
 * [Release & Refunds](how-to-guide/release-and-refunds.md)
 * [Notes](how-to-guide/notes.md)
+* [Manage Admin Transactions](how-to-guide/manage-admin-transactions.md)
 
 ## Technical Docs
 

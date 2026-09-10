@@ -4,6 +4,8 @@ The MultiSig contract is a multisignature governance contract for privileged pay
 
 Signer management and threshold updates are self-referential: `addSigner`, `removeSigner`, `updateThreshold`, and `cancelTransaction` are only callable by the MultiSig contract itself, so they can only be triggered as the executed result of a transaction proposed and approved against the MultiSig contract, going through the same flow as any other admin call.
 
+For how an admin actually works through this day to day, see [Manage Admin Transactions](../../how-to-guide/manage-admin-transactions.md).
+
 You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/MultiSig.sol)
 
 ### State Variables
