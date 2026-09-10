@@ -2,9 +2,11 @@
 
 ## Sapphire Contract API – REST Endpoints
 
-This API provides HTTP endpoints for interacting with the Sapphire DAO's [IntermediatedPaymentProcessor](core-contracts/intermediatedpaymentprocessor.sol.md) and [SimplePaymentProcessor](core-contracts/simplepaymentprocessor.sol.md) smart contracts on **Base Sepolia**. It supports invoice creation, cancellation, refunding, dispute creation, dispute resolution, and fund release.
+This API provides HTTP endpoints for interacting with the Sapphire DAO's [IntermediatedPaymentProcessor](core-contracts/intermediatedpaymentprocessor.sol.md), [SimplePaymentProcessor](core-contracts/simplepaymentprocessor.sol.md), and [Notes](core-contracts/notes.sol.md) smart contracts on **Base Sepolia**. It supports invoice creation, cancellation, refunding, dispute creation, dispute resolution, fund release, and invoice notes.
 
 Contract addresses and endpoints are not compiled in; they come from a `config.yaml` holding one section per network (`local`, `testnet`, `mainnet`), selected by the `NETWORK` environment variable at startup.
+
+Platform fees are collected through one-time stealth addresses issued by a separate fee-receiver sidecar this API calls over gRPC; see [Fee Receiver Privacy](fee-receiver-privacy.md) for the design. It reads the same `config.yaml`, so contract addresses cannot drift between the two.
 
 **Base URL**: `https://sapphiredaotesting.com/`
 
@@ -22,10 +24,14 @@ Contract addresses and endpoints are not compiled in; they come from a `config.y
 | POST   | `/v1/invoices/{invoiceId}/disputes/resolution`   | Resolve a dispute                     |
 | GET    | `/v1/settlements/status`                         | Simple processor settlement window    |
 | GET    | `/v1/exchangeRate`                               | How much of a token one USD buys      |
+| POST   | `/v1/fee-receivers`                              | Derive and approve stealth fee receivers |
+| POST   | `/v1/fee-receivers/authorization`                | Sign the fee authorization            |
+| POST   | `/v1/notes`                                      | Write an encrypted note to an invoice |
+| POST   | `/v1/notes/open`                                 | Mark a note as opened                 |
 
 The invoice id is a path segment on every invoice operation, so the request body carries only what is specific to that operation. `release`, `cancel` and `disputes` take no body at all.
 
-Every endpoint except `GET /` requires an `X-API-KEY` header, enforced by `AccessControlMiddleWare`.
+Every endpoint requires an `X-API-KEY` header, enforced by `AccessControlMiddleWare`, except `GET /` and the two fee receiver endpoints.
 
 ***
 
@@ -411,6 +417,246 @@ curl "https://sapphiredaotesting.com/v1/exchangeRate?From=USD&to=ETH&to=wBTC" \
 
 ***
 
+#### Endpoint: `/v1/fee-receivers`
+
+* **Method**: POST
+* **Description**: Derives one-time [EIP-5564](https://eips.ethereum.org/EIPS/eip-5564) stealth addresses to collect platform fees, upgrades each to an EIP-7702 delegator, and approves [Sweeper.sol](core-contracts/sweeper.sol.md) to move the fee token out of them later. See [Fee Receiver Privacy](fee-receiver-privacy.md) for the full design.
+
+The work is done by a separate fee-receiver sidecar, reached over gRPC. This API forwards the request and translates the sidecar's gRPC status into an HTTP one.
+
+**No `X-API-KEY`.** Both fee receiver endpoints are unauthenticated, unlike the rest of the API. Each call to this one sends a relayer-sponsored transaction per receiver, so whatever fronts the API is what limits who can spend that gas.
+
+Fee receivers are issued in **two steps**, and the split is the point. This call spends gas but hands back only the *ephemeral public keys*, never the addresses. Those keys are the only way to recover the addresses, so **store them before doing anything else**: they cannot be re-derived, and the gas is spent whether or not they are kept.
+
+**Request Body**
+
+```json
+{ "processor": "intermediated", "quantity": 3, "paymentToken": "USDC" }
+```
+
+**Field Details**
+
+| Field          | Type    | Required | Description                                                                                   |
+| -------------- | ------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `processor`    | string  | ✅        | `simple` or `intermediated`: which processor will verify the authorization.                     |
+| `quantity`     | integer | ❌        | How many receivers to derive, `1`-`5`. Defaults to `1`. A meta invoice needs one per sub-invoice. |
+| `paymentToken` | string  | ❌        | Token **symbol** the fee is collected in, e.g. `"USDC"`. Omit for a native-token payment.        |
+
+**About `paymentToken`**: as with `paymentTokens` on invoice creation, callers name the token by symbol and it is resolved through the network's `tokens` table. Omitting it, or naming `ETH` (which maps to the zero address), means the payment is native, and the sidecar approves the chain's wrapped native token (`contracts.wrappedNative`) instead.
+
+**Response**
+
+**Success (200)** (one key per receiver, in the order they were derived):
+
+```json
+{
+  "status": "success",
+  "ephemeralPublicKeys": [
+    "0x02f7a1c3b45d6e89f0123456789abcdef0123456789abcdef0123456789abcdef01"
+  ]
+}
+```
+
+**Example**:
+
+```bash
+curl -X POST https://sapphiredaotesting.com/v1/fee-receivers \
+-H "Content-Type: application/json" \
+-d '{ "processor": "intermediated", "quantity": 1, "paymentToken": "USDC" }'
+```
+
+***
+
+#### Endpoint: `/v1/fee-receivers/authorization`
+
+* **Method**: POST
+* **Description**: Turns the stored ephemeral public keys back into fee receiver addresses and returns the fee signer's signature over them, to pass on-chain as the processor's `_feeReceiver(s)`/`_data` arguments (see [FeeAuthorizationLib](library/feeauthorizationlib.sol.md)).
+
+Re-deriving is what makes it safe to accept these keys back from a client: a key can only ever resolve to an address the platform's spending and viewing keys control, never to one the caller chose.
+
+**Request Body**
+
+```json
+{
+  "invoiceId": "59808737901387817475691215581034097896123425895641016234844280889",
+  "processor": "intermediated",
+  "kind": "meta",
+  "paymentToken": "USDC",
+  "ephemeralPublicKeys": ["0x02f7a1c3...", "0x03b8d2e4..."]
+}
+```
+
+**Field Details**
+
+| Field                 | Type     | Required | Description                                                                             |
+| --------------------- | -------- | -------- | ------------------------------------------------------------------------------------------ |
+| `invoiceId`           | string   | ✅        | The on-chain invoice id, base-10. For `kind: "meta"`, the meta-invoice id.               |
+| `processor`           | string   | ✅        | `simple` or `intermediated`. Must match the processor the invoice lives on.              |
+| `kind`                | string   | ❌        | `single` (default) or `meta`. `meta` requires `processor: "intermediated"`.              |
+| `ephemeralPublicKeys` | string\[] | ✅        | The keys from the previous call, **in sub-invoice order**. At most 5.                    |
+| `paymentToken`        | string   | ❌        | Token symbol, as above.                                                                  |
+
+**About `kind`**: it is never inferred from how many keys you send. A meta invoice signs one digest over the whole address array, and a meta invoice holding a single sub-invoice still needs that array form, so a `single` request must carry exactly one key, and a meta invoice must say so explicitly.
+
+**Response**
+
+**Success (200)** (`feeReceivers` is index-aligned with the meta-invoice's `subInvoiceIds`, and the one `signature` covers the whole array):
+
+```json
+{
+  "status": "success",
+  "feeReceivers": ["0x9ba1...", "0x4cd2..."],
+  "signature": "0x7f3e..."
+}
+```
+
+**Example**:
+
+```bash
+curl -X POST https://sapphiredaotesting.com/v1/fee-receivers/authorization \
+-H "Content-Type: application/json" \
+-d '{
+  "invoiceId": "59808737901387817475691215581034097896123425895641016234844280889",
+  "processor": "intermediated",
+  "kind": "single",
+  "ephemeralPublicKeys": ["0x02f7a1c3..."]
+}'
+```
+
+**Error Responses (both fee receiver endpoints)**:
+
+| Status | Meaning                                                                                                         |
+| ------ | ------------------------------------------------------------------------------------------------------------------ |
+| `400`  | Rejected by this API (unknown `processor`, `kind` or token symbol; a non-integer `invoiceId`; no keys) or by the sidecar (`quantity` out of range, a meta invoice on a simple processor, a `single` invoice with several keys). |
+| `502`  | The sidecar failed internally: a chain error, or one of its keys is unset. Its own message is generic by design.  |
+| `503`  | The fee-receiver sidecar is not configured for this network, or the relayer has no native balance to sponsor the delegations. |
+| `504`  | The sidecar did not answer within its 25s call budget.                                                            |
+
+A rejection from the sidecar keeps the sidecar's own wording in `reason`:
+
+```json
+{ "error": "error creating fee receivers", "reason": "quantity must be between 1 and 5" }
+```
+
+***
+
+#### Endpoint: `/v1/notes`
+
+* **Method**: POST
+* **Description**: Writes a note against an invoice via [createNote](core-contracts/notes.sol.md#createnote). The content is encrypted by the caller and reaches this API as an opaque hex payload, so the plaintext is never seen or stored server-side.
+
+**Authorization**: the `X-API-KEY` header is the only check. This API pays the gas and signs on the author's behalf, so the caller is trusted to have authenticated whoever the `author` field names, and to have confirmed that they are a party on the invoice. Do not expose this endpoint to browsers directly.
+
+**Request Body**
+
+```json
+{
+  "invoiceId": "59808737901387817475691215581034097896123425895641016234844280889",
+  "author": "0x0f447989b14A3f0bbf08808020Ec1a6DE0b8cbC4",
+  "content": "0x4a6f8b2c1d...",
+  "share": true
+}
+```
+
+**Field Details**
+
+| Field       | Type    | Required | Description                                                        |
+| ----------- | ------- | -------- | ---------------------------------------------------------------------- |
+| `invoiceId` | string  | ✅        | On-chain invoice ID, base-10.                                      |
+| `author`    | string  | ✅        | Address the note is attributed to; must be a party on the invoice. |
+| `content`   | string  | ✅        | Already-encrypted note, `0x`-prefixed hex, at most 4096 bytes.     |
+| `share`     | boolean | ❌        | `true` publishes the note to both parties; private otherwise.      |
+
+**Response**
+
+**Success (200)**:
+
+```json
+{ "success": true, "txHash": "0x123456..." }
+```
+
+**Error (400 / 413)**:
+
+```json
+{ "success": false, "error": "Invalid author address" }
+```
+
+* `400` for a malformed body, a bad `invoiceId` or `author`, or a `content` that is missing or not `0x`-prefixed hex.
+* `413` for a `content` payload over 4096 bytes.
+
+**Notes**:
+
+* Encryption is entirely the caller's concern. This API validates that `content` is well-formed hex within the size cap and relays the bytes to the contract unchanged; it holds no note key and cannot read a note back.
+* The write returns as soon as the transaction is broadcast; the receipt is not awaited.
+
+**Example**:
+
+```bash
+curl -X POST https://sapphiredaotesting.com/v1/notes \
+-H "Content-Type: application/json" \
+-H "X-API-KEY: YOUR_API_KEY_HERE" \
+-d '{
+  "invoiceId": "59808737901387817475691215581034097896123425895641016234844280889",
+  "author": "0x0f447989b14A3f0bbf08808020Ec1a6DE0b8cbC4",
+  "content": "0x4a6f8b2c1d",
+  "share": true
+}'
+```
+
+***
+
+#### Endpoint: `/v1/notes/open`
+
+* **Method**: POST
+* **Description**: Records that the author has opened a note, via [setOpened](core-contracts/notes.sol.md#setopened). Only opening is written on chain; closing is a client-side state.
+
+**Request Body**
+
+```json
+{
+  "invoiceId": "59808737901387817475691215581034097896123425895641016234844280889",
+  "author": "0x0f447989b14A3f0bbf08808020Ec1a6DE0b8cbC4",
+  "noteId": "1"
+}
+```
+
+**Field Details**
+
+| Field       | Type   | Required | Description                    |
+| ----------- | ------ | -------- | ---------------------------------- |
+| `invoiceId` | string | ✅        | On-chain invoice ID, base-10.  |
+| `author`    | string | ✅        | Address opening the note.      |
+| `noteId`    | string | ✅        | Id of the note to mark opened. |
+
+**Response**
+
+**Success (200)**:
+
+```json
+{ "success": true, "txHash": "0x123456..." }
+```
+
+**Error (400)**:
+
+```json
+{ "success": false, "error": "noteId must be a base-10 integer" }
+```
+
+**Example**:
+
+```bash
+curl -X POST https://sapphiredaotesting.com/v1/notes/open \
+-H "Content-Type: application/json" \
+-H "X-API-KEY: YOUR_API_KEY_HERE" \
+-d '{
+  "invoiceId": "59808737901387817475691215581034097896123425895641016234844280889",
+  "author": "0x0f447989b14A3f0bbf08808020Ec1a6DE0b8cbC4",
+  "noteId": "1"
+}'
+```
+
+***
+
 ### Configuration
 
 Contract addresses, RPC endpoints, checkout/subgraph URLs, and the signer key are not compiled into the API; they live in a `config.yaml` with one section per network (`local`, `testnet`, `mainnet`). `NETWORK` selects which section is active and is required; there is no silent default. Only the selected section is validated, so a network that is not deployed yet cannot break startup.
@@ -419,10 +665,12 @@ Contract addresses, RPC endpoints, checkout/subgraph URLs, and the signer key ar
 * **Signer key**: `signerKey` selects which key signs transactions, per network (e.g. a local-only key on `local` versus the production signing key on the deployed networks), so a local run cannot touch a deployed network's key.
 * **Checkout/explorer/subgraph URLs**: each network configures its own `urls.checkout`, `urls.explorer` and `urls.subgraph`, which is why the same request body against `local`, `testnet` or `mainnet` produces checkout links and transaction links for the right network.
 * **Oracle**: `contracts.oracleManager` is optional; without it, `/v1/exchangeRate` responds `503`.
+* **Fee receiver sidecar**: `services.feeReceiver` is the sidecar's `host:port` as a gRPC target, not a URL. Leaving it empty disables `/v1/fee-receivers` with a `503`, the same way an unset `oracleManager` disables exchange rates.
+* **Sweeper / wrapped native**: `contracts.sweeper` and `contracts.wrappedNative` are read only by the sidecar, not by this API. `sweeper` is the contract each fee receiver approves for the fee token; `wrappedNative` is what a native-token payment is approved in.
 
 ### Notes
 
-* All endpoints except `GET /` require an `X-API-KEY` header, enforced by `AccessControlMiddleWare`.
+* All endpoints require an `X-API-KEY` header, enforced by `AccessControlMiddleWare`, except `GET /` and the two fee receiver endpoints.
 * Invoice states are: `INITIATED` (1), `PAID` (2), `REFUNDED` (3), `CANCELED` (4), `DISPUTED` (5), `DISPUTE_RESOLVED` (6), `DISPUTE_DISMISSED` (7), `DISPUTE_SETTLED` (8), `RELEASED` (9).
 * The contracts use Chainlink price feeds (`AggregatorV3Interface`) for USD-to-token conversions, supporting the native token and ERC20 tokens.
 * The intermediated platform operator, retrieved via [getIntermediatedPlatformsOperator](core-contracts/paymentprocessorstorage.sol.md#getintermediatedplatformsoperator), controls privileged operations (`createSingleInvoice`, `createMetaInvoice`, `createDispute`).

@@ -2,7 +2,7 @@
 
 The payment processor Solidity smart contract is the main user interface contract. Most users will interact with the SapphireDao platform via the `SimplePaymentProcessor.sol` contract. It shows invoice creation, management, payments, and escrow functionality on the blockchain.
 
-Contract Address: [0xd4a9e5ac9f54beccd7c12ca6bd7bd026bbf0058d](https://sepolia.etherscan.io/address/0xd4a9e5ac9f54beccd7c12ca6bd7bd026bbf0058d)
+Contract Address: [0x0741D5d919900c216Db4184e2cA0aaE6f88f21C3](https://sepolia.basescan.org/address/0x0741D5d919900c216Db4184e2cA0aaE6f88f21C3)
 
 You can find the full implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/SimplePaymentProcessor.sol)
 

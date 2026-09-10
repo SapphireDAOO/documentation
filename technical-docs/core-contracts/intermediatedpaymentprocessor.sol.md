@@ -150,7 +150,7 @@ constructor(address _paymentProcessorStorageAddress, address _oracle) ;
 
 Creates a single invoice with the specified parameters and returns its unique hash.
 
-Only callable by the intermediated platform.
+Only callable by the intermediated platform. `_param.paymentTokens` fixes which tokens the invoice can be paid with; reverts with `NoPaymentTokens` if empty, or `UnsupportedToken` if any entry has no configured oracle price feed.
 
 ```solidity
 function createSingleInvoice(InvoiceCreationParam memory _param)
@@ -176,7 +176,7 @@ function createSingleInvoice(InvoiceCreationParam memory _param)
 
 Creates a meta-invoice composed of multiple sub-invoices for a buyer.
 
-Only callable by the intermediated platform. Each sub-invoice is created using the provided parameters, and all are linked under a single meta-invoice key.
+Only callable by the intermediated platform. Each sub-invoice is created using the provided parameters, and all are linked under a single meta-invoice key. Each sub-invoice's own `paymentTokens` fixes which tokens it can be paid with; reverts with `NoPaymentTokens` if any entry is empty, or `UnsupportedToken` if any listed token has no configured oracle price feed.
 
 ```solidity
 function createMetaInvoice(InvoiceCreationParam[] memory _param)
@@ -202,7 +202,7 @@ function createMetaInvoice(InvoiceCreationParam[] memory _param)
 
 Pays a single invoice using native ETH or an approved ERC20 token.
 
-Any caller other than the invoice's seller may pay; the payer becomes the invoice's `buyer` (there's no pre-existing buyer requirement; reverts with `BuyerCannotBeSeller` only if the caller is the seller). Use `address(0)` for native payments. `_feeReceiver` is recorded on the invoice and paid the platform fee on release or dispute settlement, so it must be authorized by the fee signer via `_data`: reverts with `InvalidFeeReceiver` if `_feeReceiver` is the zero address, or `InvalidFeeAuthorization` if `_data` isn't a valid signature from [`PaymentProcessorStorage`'s fee signer](paymentprocessorstorage.sol.md#setfeesigner) over this invoice and receiver (see [FeeAuthorizationLib](../library/feeauthorizationlib.sol.md)). Guarded by `nonReentrant`.
+Any caller other than the invoice's seller may pay; the payer becomes the invoice's `buyer` (there's no pre-existing buyer requirement; reverts with `BuyerCannotBeSeller` only if the caller is the seller). Use `address(0)` for native payments; reverts with `PaymentTokenNotAllowed` if `_paymentToken` isn't one of the tokens registered for this invoice at creation. `_feeReceiver` is recorded on the invoice and paid the platform fee on release or dispute settlement, so it must be authorized by the fee signer via `_data`: reverts with `InvalidFeeReceiver` if `_feeReceiver` is the zero address, or `InvalidFeeAuthorization` if `_data` isn't a valid signature from [`PaymentProcessorStorage`'s fee signer](paymentprocessorstorage.sol.md#setfeesigner) over this invoice and receiver (see [FeeAuthorizationLib](../library/feeauthorizationlib.sol.md)). Guarded by `nonReentrant`.
 
 ```solidity
 function payInvoice(uint216 _invoiceId, address _paymentToken, address _feeReceiver, bytes memory _data)
@@ -225,27 +225,45 @@ function payInvoice(uint216 _invoiceId, address _paymentToken, address _feeRecei
 
 Pays all sub-invoices in a meta-invoice using native ETH.
 
-Caller must send exactly the oracle-converted total for the meta-invoice price. Any dust from per-sub-invoice integer rounding is refunded to the caller. Canceled sub-invoices are automatically excluded. Sub-invoices not in CREATED state are silently skipped. Guarded by `nonReentrant`.
+Caller must send exactly the oracle-converted total for the meta-invoice price. Any dust from per-sub-invoice integer rounding is refunded to the caller. Canceled sub-invoices are automatically excluded. Sub-invoices not in CREATED state are silently skipped, but still consume their slot in `_feeReceivers`. Reverts with `PaymentTokenNotAllowed` if native currency isn't a registered token for any paid sub-invoice. `_feeReceivers` is one entry per sub-invoice, in the meta-invoice's `subInvoiceIds` order; a single signature over the whole array authorizes it, so reverts with `FeeReceiverCountMismatch` if the array length doesn't match the sub-invoice count, `InvalidFeeReceiver` if any entry is the zero address, or `InvalidFeeAuthorization` if `_data` isn't a valid signature from the fee signer over the array (see [FeeAuthorizationLib](../library/feeauthorizationlib.sol.md)). Guarded by `nonReentrant`.
 
 ```solidity
-function payMetaInvoiceWithValue(uint216 _invoiceId) external payable nonReentrant whenNotPaused;
+function payMetaInvoiceWithValue(uint216 _invoiceId, address[] calldata _feeReceivers, bytes memory _data)
+    external
+    payable
+    nonReentrant
+    whenNotPaused;
 ```
 
 **Parameters**
 
-|      Name     |    Type   |             Description             |
-| :-----------: | :-------: | :---------------------------------: |
-| `_invoiceId`  | `uint216` | The meta-invoice ID to pay.         |
+|       Name       |     Type    |                             Description                             |
+| :---------------: | :---------: | :---------------------------------------------------------------------: |
+|   `_invoiceId`   |  `uint216`  |                     The meta-invoice ID to pay.                     |
+| `_feeReceivers`  | `address[]` | The fee receiver for each sub-invoice, in `subInvoiceIds` order. |
+|      `_data`     |   `bytes`   | The fee signer's 65-byte ECDSA signature over the whole array's authorization digest. |
 
 #### payMetaInvoice
 
 Pays all sub-invoices in a meta invoice using native ETH or ERC20.
 
-Canceled sub-invoices are automatically excluded. Sub-invoices not in CREATED state are silently skipped. Guarded by `nonReentrant`.
+Canceled sub-invoices are automatically excluded. Sub-invoices not in CREATED state are silently skipped, but still consume their slot in `_feeReceivers`. Reverts with `PaymentTokenNotAllowed` if `_paymentToken` isn't a registered token for any paid sub-invoice. `_feeReceivers` follows the same rules as [payMetaInvoiceWithValue](#paymetainvoicewithvalue): one entry per sub-invoice in `subInvoiceIds` order, authorized by a single signature over the array (see [FeeAuthorizationLib](../library/feeauthorizationlib.sol.md)). Guarded by `nonReentrant`.
 
 ```solidity
-function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonReentrant whenNotPaused;
+function payMetaInvoice(uint216 _invoiceId, address _paymentToken, address[] calldata _feeReceivers, bytes memory _data)
+    external
+    nonReentrant
+    whenNotPaused;
 ```
+
+**Parameters**
+
+|       Name       |     Type    |                             Description                             |
+| :---------------: | :---------: | :---------------------------------------------------------------------: |
+|   `_invoiceId`   |  `uint216`  |                     The meta invoice ID to be paid.                     |
+| `_paymentToken`  |  `address`  |                The token address used for payment.                |
+| `_feeReceivers`  | `address[]` | The fee receiver for each sub-invoice, in `subInvoiceIds` order. |
+|      `_data`     |   `bytes`   | The fee signer's 65-byte ECDSA signature over the whole array's authorization digest. |
 
 **Parameters**
 
@@ -274,7 +292,7 @@ function createDispute(uint216 _invoiceId) external onlyIntermediatedPlatformsOp
 
 handle a dispute on a given invoice.
 
-Callable only by the intermediated platform. Must be called after a dispute is created. The resolution can be DISPUTE\_DISMISSED, or DISPUTE\_SETTLED. If settled, the seller and buyer receive a split of the funds based on sellerShare, with the seller's share subject to the platform fee rate captured on the invoice at creation (`feeRate`); the fee itself is paid to the invoice's recorded `feeReceiver`, falling back to the global fee receiver for sub-invoices.
+Callable only by the intermediated platform. Must be called after a dispute is created. The resolution can be DISPUTE\_DISMISSED, or DISPUTE\_SETTLED. If settled, the seller and buyer receive a split of the funds based on sellerShare, with the seller's share subject to the platform fee rate captured on the invoice at creation (`feeRate`); the fee itself is paid to the invoice's recorded `feeReceiver`, falling back to the global fee receiver only for invoices paid before per-invoice receivers existed.
 
 ```solidity
 function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare)
@@ -295,7 +313,7 @@ function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerSha
 
 Releases escrowed funds to the seller after the release window has passed.
 
-Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global fee rate, so a later change to the global rate never affects an already-created invoice. The fee is paid to the fee receiver authorized when the invoice was paid (`feeReceiver`), falling back to [`PaymentProcessorStorage`'s global fee receiver](paymentprocessorstorage.sol.md#getfeereceiver) for sub-invoices paid through a meta-invoice, which carry no per-invoice fee receiver. The invoice transitions to RELEASED and its balance is zeroed. There is no heap; this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
+Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global fee rate, so a later change to the global rate never affects an already-created invoice. The fee is paid to the fee receiver authorized when the invoice was paid (`feeReceiver`), including sub-invoices paid through a meta-invoice, each of which carries its own; the fallback to [`PaymentProcessorStorage`'s global fee receiver](paymentprocessorstorage.sol.md#getfeereceiver) only covers invoices paid before per-invoice receivers existed. The invoice transitions to RELEASED and its balance is zeroed. There is no heap; this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
 
 ```solidity
 function release(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator whenNotPaused;
@@ -476,6 +494,27 @@ function getMetaInvoice(uint216 _metaInvoiceId) external view returns (MetaInvoi
 | :-----: | :-----------: | :--------------------: |
 |   `m`   | `MetaInvoice` | The meta-invoice data. |
 
+#### isPaymentTokenAllowed
+
+Reports whether an invoice accepts a given payment token.
+
+```solidity
+function isPaymentTokenAllowed(uint216 _invoiceId, address _paymentToken) external view returns (bool allowed);
+```
+
+**Parameters**
+
+|      Name      |    Type   |                       Description                      |
+| :-------------: | :-------: | :---------------------------------------------------------: |
+|  `_invoiceId`  | `uint216` |                   The invoice to check.                   |
+| `_paymentToken` | `address` | The token to check; `address(0)` for native currency. |
+
+**Returns**
+
+|   Name    |  Type  |                       Description                       |
+| :-------: | :----: | :----------------------------------------------------------: |
+| `allowed` | `bool` | True when the token was registered at invoice creation. |
+
 #### totalUniqueInvoiceCreated
 
 Returns the total number of unique invoices created.
@@ -597,7 +636,7 @@ struct Invoice {
 |        `seller`        | `address` |                                              Address of the seller.                                                      |
 |        `escrow`        | `address` |                              Address of the escrow contract holding the funds.                                           |
 |      `paymentToken`    | `address` |                       Token used for payment. Address zero for native currency.                                         |
-|      `feeReceiver`     | `address` | Address that receives the platform fee for this invoice, authorized by the fee signer when the buyer paid. Zero for sub-invoices paid as part of a meta-invoice. |
+|      `feeReceiver`     | `address` | Address that receives the platform fee for this invoice, authorized by the fee signer when the buyer paid. Sub-invoices carry their own, taken from the array signed for the meta-invoice. |
 |      `amountPaid`      | `uint256` |            Total amount paid by the buyer for this invoice, in the payment token (native token if `paymentToken == address(0)`).       |
 |         `price`        | `uint256` |                                    Invoice amount expressed in USD (8 decimals).                                         |
 |        `balance`       | `uint256` |             Current balance of the escrow associated with the order, accounting for total amount paid minus refunds or releases.        |
@@ -628,6 +667,7 @@ struct InvoiceCreationParam {
     address seller;
     uint256 price;
     uint32 escrowHoldPeriod;
+    address[] paymentTokens;
 }
 ```
 
@@ -637,6 +677,7 @@ struct InvoiceCreationParam {
 |       `seller`      | `address` |                                          Address of the seller.                                          |
 |       `price`       | `uint256` |                     Price or amount to be paid for the invoice in USD (8 decimals).                     |
 | `escrowHoldPeriod`  |  `uint32` |            Duration (in seconds) that the escrow will lock the payment before it's releasable. Must be non-zero; reverts `HoldPeriodCanNotBeZero` otherwise.          |
+| `paymentTokens`    | `address[]` | The tokens this invoice accepts as payment. Must hold at least one entry (reverts `NoPaymentTokens` otherwise); include `address(0)` to accept native currency. Fixed at creation; a buyer paying with any other token reverts `PaymentTokenNotAllowed`. |
 
 ### Events
 
@@ -666,6 +707,19 @@ event MetaInvoiceCreated(uint216 indexed metaInvoiceId, uint256 indexed totalPri
 | `metaInvoiceId` | `uint216` | The unique identifier of the newly created meta-invoice.                           |
 | `totalPrice`    | `uint256` | The aggregated total price (in USD, 8 decimals) of all sub-invoices. |
 
+#### PaymentTokensRegistered
+
+Emitted with the set of tokens an invoice accepts, once at creation.
+
+```solidity
+event PaymentTokensRegistered(uint216 indexed invoiceId, address[] paymentTokens);
+```
+
+| Name             | Type        | Description                                                       |
+| :---------------: | :---------: | :------------------------------------------------------------------: |
+| `invoiceId`      | `uint216`   | The invoice the tokens were registered for.                      |
+| `paymentTokens`  | `address[]` | The accepted tokens; `address(0)` means native currency.         |
+
 #### InvoicePaid
 
 Emitted when an invoice is successfully paid and an escrow contract is created.
@@ -688,7 +742,7 @@ event InvoicePaid(
 | `escrowAddress` | `address` | The address of the escrow contract created to hold the payment.          |
 | `amount`        | `uint256` | The amount paid, denominated in the token's smallest unit.               |
 | `releaseAt`     | `uint40`  | The UNIX timestamp when the escrowed funds become releasable.            |
-| `feeReceiver`   | `address` | The address recorded to be paid this invoice's platform fee. Zero for a sub-invoice paid through a meta-invoice, which falls back to the global fee receiver. |
+| `feeReceiver`   | `address` | The address recorded to be paid this invoice's platform fee, including for a sub-invoice paid through a meta-invoice. |
 
 #### PaymentReleased
 
@@ -855,6 +909,9 @@ event OracleUpdated(address indexed previousOracle, address indexed newOracle);
 | `HoldPeriodCanNotBeZero()` | Thrown when an invoice is created with a zero escrow hold period. |
 | `InvalidFeeAuthorization()` | Thrown when the fee receiver is not authorized by a signature from the configured fee signer. |
 | `InvalidFeeReceiver()` | Thrown when the zero address is supplied as the fee receiver. |
+| `PaymentTokenNotAllowed(uint216 invoiceId, address paymentToken)` | Thrown when paying an invoice with a token it does not accept. |
+| `NoPaymentTokens()` | Thrown when an invoice is created without any accepted payment token. |
+| `FeeReceiverCountMismatch(uint256 provided, uint256 expected)` | Thrown when a meta-invoice payment supplies the wrong number of fee receivers. |
 | `BuyerCannotBeSeller()` | Thrown if the buyer and seller are the same address. |
 | `InvalidInvoiceState()` | Thrown when the invoice is in a state that does not allow the attempted action. |
 | `InvoiceDoesNotExist()` | Thrown when the invoice does not exist. |

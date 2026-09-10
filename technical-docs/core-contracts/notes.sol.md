@@ -8,8 +8,9 @@ Notes.sol enables:
 - Optional sharing for non-authors
 - Per-user opened state tracking
 - Allowlist-based write access controlled by the storage owner
+- Write-once public key registration, so others know which key to encrypt notes to
 
-Contract Address: [0xbe210c16e990e74a92eb85060bb33eb03418c565](https://sepolia.etherscan.io/address/0xbe210c16e990e74a92eb85060bb33eb03418c565)
+Contract Address: [0xE818dA06Ceed4Ac6c6d4871a5Fc0226B8032834e](https://sepolia.basescan.org/address/0xE818dA06Ceed4Ac6c6d4871a5Fc0226B8032834e)
 
 You can find the full code implementation [here](http://github.com/SapphireDAOO/payment-processor/blob/main/src/Notes.sol)
 
@@ -185,6 +186,42 @@ function updateVersion(uint8 _newVersion) external;
 | :-----------: | :-----: | :------------------------------------------------: |
 | `_newVersion` | `uint8` | The new note encryption version identifier to use. |
 
+#### setPublicKey
+
+Registers the caller's wallet public key, so others can encrypt notes to it.
+
+An account registers under its own slot, so a caller can only ever set its own key. The key is not verified against the caller beyond a 64-byte length check; reverts with `InvalidPublicKey` otherwise. The key is stored alongside the note encryption version active at registration, so a reader knows which scheme the key was published for. Write-once: reverts with `PublicKeyAlreadySet` if the caller already registered a key.
+
+```solidity
+function setPublicKey(bytes calldata _publicKey) external;
+```
+
+**Parameters**
+
+|      Name      |  Type   |            Description            |
+| :-------------: | :-----: | :------------------------------------: |
+| `_publicKey` | `bytes` | The caller's 64-byte public key. |
+
+#### getPublicKey
+
+Returns the public key an account registered.
+
+```solidity
+function getPublicKey(address _account) external view returns (PublicKey memory publicKey);
+```
+
+**Parameters**
+
+|    Name    |   Type    |        Description        |
+| :---------: | :-------: | :----------------------------: |
+| `_account` | `address` | The account to look up. |
+
+**Returns**
+
+|    Name     |    Type     |                                       Description                                       |
+| :----------: | :---------: | :-------------------------------------------------------------------------------------------: |
+| `publicKey` | `PublicKey` | The registered key and the note version it was registered under. The `key` is empty when the account has not registered one. |
+
 #### setAuthorized
 
 Updates the authorization status for a user.
@@ -240,6 +277,22 @@ struct Note {
 | `version` |  `uint8`  |             The note schema version.             |
 | `content` |  `bytes`  |           The encrypted note content.            |
 
+#### PublicKey
+
+A public key registered by an account, so others can encrypt notes to it.
+
+```solidity
+struct PublicKey {
+    bytes key;
+    uint8 version;
+}
+```
+
+|  Field   |  Type   |                          Description                          |
+| :------: | :-----: | :------------------------------------------------------------: |
+|  `key`   | `bytes` |                  The registered public key.                  |
+| `version` | `uint8` | The note encryption version that was active when the key was registered. |
+
 ### Events
 
 #### NoteCreated
@@ -257,6 +310,22 @@ event NoteCreated(uint216 indexed invoiceId, uint256 indexed noteId, address ind
 |      `author`      | `address` |         The address of the account that created the note.         |
 |      `share`       |  `bool`   |     Indicates whether the note is shared with other parties.      |
 | `encryptedContent` |  `bytes`  |                The encrypted contents of the note.                |
+
+#### PublicKeySet
+
+Emitted once when an account registers its public key.
+
+Never emitted twice for the same account: registration is write-once.
+
+```solidity
+event PublicKeySet(address indexed account, bytes publicKey, uint8 version);
+```
+
+|     Name      |   Type    |                     Description                     |
+| :------------: | :-------: | :-----------------------------------------------------: |
+|   `account`   | `address` |        The account that registered the key.        |
+| `publicKey`  |  `bytes`  |         The public key that was registered.         |
+|   `version`   |  `uint8`  | The note encryption version active at registration. |
 
 #### NoteStateChanged
 
@@ -280,3 +349,5 @@ event NoteStateChanged(uint216 indexed invoiceId, uint256 indexed noteId, addres
 | `Unauthorized()` | Thrown when the caller is not authorized to access the note. |
 | `EmptyContent()` |       Thrown when creating a note with empty content.        |
 | `NoteNotFound()` |        Thrown when the requested note does not exist.        |
+| `InvalidPublicKey()` |     Thrown when the supplied public key is not 64 bytes.     |
+| `PublicKeyAlreadySet()` | Thrown when an account that already registered a public key tries to register another. |

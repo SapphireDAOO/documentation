@@ -53,7 +53,7 @@ constructor(address _paymentProcessorStorageAddress, address _sequencerUptimeFee
 
 Fetches the Chainlink USD price for a payment token and validates feed freshness.
 
-Performs three layers of validation: sequencer uptime check (if feed is set), round completeness, and heartbeat staleness. Reverts if any check fails.
+Reverts with `UnsupportedToken` unless the token's `PriceFeedConfig.allowed` flag is set. Performs three layers of validation: sequencer uptime check (if feed is set), round completeness, and heartbeat staleness. Reverts if any check fails.
 
 ```solidity
 function getUsdPerToken(address _paymentToken) external view returns (uint256);
@@ -71,11 +71,55 @@ function getUsdPerToken(address _paymentToken) external view returns (uint256);
 | :--: | :-------: | :----------------------------------------------------------------------------: |
 |      | `uint256` | The token's USD price with 8 decimals as returned by the Chainlink aggregator. |
 
+#### getUsdPerTokenBatch
+
+Fetches Chainlink USD prices for several payment tokens in one call.
+
+Applies the same validation as [getUsdPerToken](#getusdpertoken) to each token, but checks sequencer uptime once for the whole batch rather than once per token. Reverts on the first unsupported or invalid token, aborting the entire batch.
+
+```solidity
+function getUsdPerTokenBatch(address[] calldata _paymentTokens) external view returns (uint256[] memory prices);
+```
+
+**Parameters**
+
+|       Name        |     Type     |                             Description                              |
+| :----------------: | :----------: | :------------------------------------------------------------------------: |
+| `_paymentTokens`  | `address[]`  | The token addresses to price (`address(0)` for native ETH). |
+
+**Returns**
+
+|  Name    |     Type      |                             Description                             |
+| :------: | :-----------: | :----------------------------------------------------------------------: |
+| `prices` | `uint256[]`   | Each token's USD price with 8 decimals, index-aligned with `_paymentTokens`. |
+
+#### isSupportedToken
+
+Reports whether a token is allowed as payment.
+
+Lets callers check support without provoking the revert `getUsdPerToken` would raise.
+
+```solidity
+function isSupportedToken(address _token) external view returns (bool supported);
+```
+
+**Parameters**
+
+|   Name   |   Type    |                    Description                    |
+| :------: | :-------: | :--------------------------------------------------: |
+| `_token` | `address` | The token to check; `address(0)` for native currency. |
+
+**Returns**
+
+|    Name     |  Type  |                     Description                     |
+| :---------: | :----: | :------------------------------------------------------: |
+| `supported` | `bool` | True when the token's price feed is marked allowed. |
+
 #### setPriceFeed
 
 Sets the Chainlink price feed configuration for a specific payment token.
 
-Only callable by the owner of `ppStorage`. Setting `_config.aggregator` to `address(0)` removes the token from accepted payment methods.
+Only callable by the owner of `ppStorage`. Support is controlled entirely by `_config.allowed`: a token can be turned off without clearing its aggregator, and re-enabled without resupplying it.
 
 ```solidity
 function setPriceFeed(address _token, PriceFeedConfig memory _config) external;
@@ -128,13 +172,15 @@ Configuration for a Chainlink price feed associated with a payment token.
 struct PriceFeedConfig {
     address aggregator;
     uint96 heartbeat;
+    bool allowed;
 }
 ```
 
 |    Field     |   Type    |                                                          Description                                                          |
 | :----------: | :-------: | :---------------------------------------------------------------------------------------------------------------------------: |
-| `aggregator` | `address` |                   Address of the Chainlink AggregatorV3 contract. Set to `address(0)` to disable the token.                   |
+| `aggregator` | `address` |                                       Address of the Chainlink AggregatorV3 contract.                                       |
 | `heartbeat`  | `uint96`  | Maximum acceptable age (in seconds) of a price update before it is considered stale. Should match the feed's update interval. |
+| `allowed`    |  `bool`   | Whether the token may be used for payment. This flag alone decides support, independently of `aggregator`. |
 
 ### Events
 
@@ -149,7 +195,7 @@ event PriceFeedSet(address indexed token, address indexed aggregator, uint96 hea
 |     Name     |   Type    |                            Description                             |
 | :----------: | :-------: | :----------------------------------------------------------------: |
 |   `token`    | `address` | The payment token address (`address(0)` for the native currency).  |
-| `aggregator` | `address` | The Chainlink aggregator address (`address(0)` removes the token). |
+| `aggregator` | `address` | The Chainlink aggregator address. |
 | `heartbeat`  | `uint96`  |     The maximum acceptable age (in seconds) of a price update.     |
 
 ### Errors
