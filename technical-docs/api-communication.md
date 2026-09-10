@@ -13,7 +13,7 @@ Platform fees are collected through one-time stealth addresses issued by a separ
 ### Endpoints
 
 | Method | Path                                            | Description                          |
-| ------ | ------------------------------------------------ | ------------------------------------- |
+| :----: | :----------------------------------------------: | :-----------------------------------: |
 | GET    | `/`                                              | Health check                          |
 | POST   | `/v1/invoices`                                   | Create one or more invoices           |
 | GET    | `/v1/invoices/{invoiceId}`                       | Read invoice data from the subgraph   |
@@ -69,7 +69,7 @@ Every endpoint requires an `X-API-KEY` header, enforced by `AccessControlMiddleW
 **Field Details**
 
 | Field              | Type     | Required | Description                                                                            |
-| ------------------ | -------- | -------- | --------------------------------------------------------------------------------------- |
+| :----------------: | :------: | :------: | :-------------------------------------------------------------------------------------: |
 | `orderId`          | string   | ✅        | Unique client-side identifier for the invoice (e.g., a UUID or any string).             |
 | `seller`           | string   | ✅        | Ethereum address of the seller. Must not be the zero address.                           |
 | `price`            | number   | ✅        | Invoice price in cents; scaled on the server using the `currency` precision.            |
@@ -250,7 +250,7 @@ curl -X POST https://sapphiredaotesting.com/v1/invoices/598087379013878174756912
 ```
 
 | Field         | Type   | Required | Description                                                             |
-| ------------- | ------ | -------- | ------------------------------------------------------------------------ |
+| :-----------: | :----: | :------: | :----------------------------------------------------------------------: |
 | `refundShare` | string | ✅        | Refund share in basis points (e.g., `"10000"` = 100%, `"5000"` = 50%).  |
 
 **Success (200)**:
@@ -323,14 +323,14 @@ curl -X POST https://sapphiredaotesting.com/v1/invoices/598087379013878174756912
 ```
 
 | Field         | Type    | Required                                    | Description                                                               |
-| ------------- | ------- | -------------------------------------------- | --------------------------------------------------------------------------- |
+| :-----------: | :-----: | :------------------------------------------: | :-------------------------------------------------------------------------: |
 | `resolution`  | integer | ✅                                            | Enum value specifying the action type (see IntermediatedPlatformsOperatorAction below). |
 | `sellerShare` | string  | ❌ Only if `resolution = 2` (SettleDispute)   | Seller's share in basis points (e.g., `"10000"` = 100%, `"9000"` = 90%).   |
 
 **IntermediatedPlatformsOperatorAction Enum (`resolution`)**
 
 | Value | Name           | Description                                                                                             | Contract Function                        |
-| ----- | -------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| :---: | :------------: | :-------------------------------------------------------------------------------------------------------: | :---------------------------------------: |
 | `1`   | ResolveDispute | Both buyer and seller agree to dismiss the dispute, with escrow allocation unchanged (fully to seller)   | `resolveDispute`                          |
 | `2`   | SettleDispute  | Dispute resolved by an arbitrator, with `sellerShare` to the seller and the rest to the buyer            | `handleDispute` with `DISPUTE_SETTLED`    |
 | `3`   | DismissDispute | Arbitrator dismisses the dispute, leaving escrow allocation unchanged (fully to seller)                  | `handleDispute` with `DISPUTE_DISMISSED`  |
@@ -384,7 +384,7 @@ curl -X POST https://sapphiredaotesting.com/v1/invoices/598087379013878174756912
 * **Description**: Reports how much of each requested token one USD buys, inverting [OracleManager.getUsdPerToken](core-contracts/oraclemanager.sol.md#getusdpertoken). The oracle address comes from the network's configured `contracts.oracleManager`.
 
 | Query  | Required | Description                                                                                        |
-| ------ | -------- | ---------------------------------------------------------------------------------------------------- |
+| :----: | :------: | :--------------------------------------------------------------------------------------------------: |
 | `from` | ❌        | Must be `USD`, the only currency the oracle prices against. Defaults to `USD`. `From` also works.   |
 | `to`   | ✅        | Token symbols from the network's tokens table. Repeated, comma-separated, or bracketed.             |
 
@@ -437,7 +437,7 @@ Fee receivers are issued in **two steps**, and the split is the point. This call
 **Field Details**
 
 | Field          | Type    | Required | Description                                                                                   |
-| -------------- | ------- | -------- | ----------------------------------------------------------------------------------------------- |
+| :------------: | :-----: | :------: | :---------------------------------------------------------------------------------------------: |
 | `processor`    | string  | ✅        | `simple` or `intermediated`: which processor will verify the authorization.                     |
 | `quantity`     | integer | ❌        | How many receivers to derive, `1`-`5`. Defaults to `1`. A meta invoice needs one per sub-invoice. |
 | `paymentToken` | string  | ❌        | Token **symbol** the fee is collected in, e.g. `"USDC"`. Omit for a native-token payment.        |
@@ -489,7 +489,7 @@ Re-deriving is what makes it safe to accept these keys back from a client: a key
 **Field Details**
 
 | Field                 | Type     | Required | Description                                                                             |
-| --------------------- | -------- | -------- | ------------------------------------------------------------------------------------------ |
+| :-------------------: | :------: | :------: | :----------------------------------------------------------------------------------------: |
 | `invoiceId`           | string   | ✅        | The on-chain invoice id, base-10. For `kind: "meta"`, the meta-invoice id.               |
 | `processor`           | string   | ✅        | `simple` or `intermediated`. Must match the processor the invoice lives on.              |
 | `kind`                | string   | ❌        | `single` (default) or `meta`. `meta` requires `processor: "intermediated"`.              |
@@ -526,7 +526,7 @@ curl -X POST https://sapphiredaotesting.com/v1/fee-receivers/authorization \
 **Error Responses (both fee receiver endpoints)**:
 
 | Status | Meaning                                                                                                         |
-| ------ | ------------------------------------------------------------------------------------------------------------------ |
+| :----: | :----------------------------------------------------------------------------------------------------------------: |
 | `400`  | Rejected by this API (unknown `processor`, `kind` or token symbol; a non-integer `invoiceId`; no keys) or by the sidecar (`quantity` out of range, a meta invoice on a simple processor, a `single` invoice with several keys). |
 | `502`  | The sidecar failed internally: a chain error, or one of its keys is unset. Its own message is generic by design.  |
 | `503`  | The fee-receiver sidecar is not configured for this network, or the relayer has no native balance to sponsor the delegations. |
@@ -561,7 +561,7 @@ A rejection from the sidecar keeps the sidecar's own wording in `reason`:
 **Field Details**
 
 | Field       | Type    | Required | Description                                                        |
-| ----------- | ------- | -------- | ---------------------------------------------------------------------- |
+| :---------: | :-----: | :------: | :--------------------------------------------------------------------: |
 | `invoiceId` | string  | ✅        | On-chain invoice ID, base-10.                                      |
 | `author`    | string  | ✅        | Address the note is attributed to; must be a party on the invoice. |
 | `content`   | string  | ✅        | Already-encrypted note, `0x`-prefixed hex, at most 4096 bytes.     |
@@ -623,7 +623,7 @@ curl -X POST https://sapphiredaotesting.com/v1/notes \
 **Field Details**
 
 | Field       | Type   | Required | Description                    |
-| ----------- | ------ | -------- | ---------------------------------- |
+| :---------: | :----: | :------: | :--------------------------------: |
 | `invoiceId` | string | ✅        | On-chain invoice ID, base-10.  |
 | `author`    | string | ✅        | Address opening the note.      |
 | `noteId`    | string | ✅        | Id of the note to mark opened. |

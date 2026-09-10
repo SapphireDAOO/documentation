@@ -36,7 +36,7 @@ Addresses and start blocks below reflect the current `subgraph.yaml` on the `bas
 - **Handler file:** `src/simple-payment-processor.ts`
 
 | Event | Handler | Description |
-| :--- | :--- | :--- |
+| :--: | :--: | :--: |
 | `InvoiceCreated(invoiceId, invoice)` | `handleInvoiceCreated` | Creates the `SimplePaymentProcessor` entity, tracks the seller as a `CREATOR` user, writes an `InvoiceEvent` |
 | `InvoicePaid(invoiceId, buyer, amountPaid, expiresAt)` | `handleInvoicePaid` | Records buyer and amount; tracks the buyer as a `PAYER` user; pushes `PaymentVolume` and a positive `EscrowBalance` delta |
 | `InvoiceAccepted(invoiceId)` | `handleInvoiceAccepted` | Sets `state = ACCEPTED` and, if not already set, `releaseAt` from the invoice's stored hold period |
@@ -58,7 +58,7 @@ Every handler above also writes an `InvoiceEvent` row and increments the `Invoic
 - **Handler file:** `src/advanced-payment-processor.ts`
 
 | Event | Handler | Description |
-| :--- | :--- | :--- |
+| :--: | :--: | :--: |
 | `InvoiceCreated(invoiceId, invoice)` | `handleAdvancedPaymentProcessorCreated` | Creates the `AdvancedPaymentProcessor` entity, links `metaInvoice` if any, tracks the seller as `CREATOR` |
 | `InvoicePaid(invoiceId, paymentToken, escrowAddress, amount, releaseAt)` | `handleInvoicePaid` | Records payment/escrow details; tracks the buyer as `PAYER`; pushes `PaymentVolume` and a positive `EscrowBalance` delta |
 | `InvoiceCanceled(invoiceId)` | `handleInvoiceCanceled` | Marks the invoice `CANCELED`; reduces the parent meta-invoice's price if applicable |
@@ -84,7 +84,7 @@ Every handler above except `InvoicePaid` also bumps the `GasPaid` singleton; eve
 - **Handler file:** `src/payment-processor-storage.ts`
 
 | Event | Handler | Description |
-| :--- | :--- | :--- |
+| :--: | :--: | :--: |
 | `AuthorizationUpdated(account, authorized)` | `handleAuthorizationUpdated` | Upserts an `AuthorizedAddress` entity |
 | `ConfigurationInitialized(config)` | `handleConfigurationInitialized` | Seeds the `StorageConfiguration` singleton from the full config struct |
 | `FeeRateUpdated(feeRate)` | `handleFeeRateUpdated` | Updates the singleton's `feeRate` |
@@ -101,7 +101,7 @@ Every handler above except `InvoicePaid` also bumps the `GasPaid` singleton; eve
 - **Handler file:** `src/notes.ts`
 
 | Event | Handler | Description |
-| :--- | :--- | :--- |
+| :--: | :--: | :--: |
 | `NoteCreated(invoiceId, noteId, author, share, encryptedContent)` | `handleNoteCreated` | Creates a `Note` entity, id `{invoiceId}-{noteId}` |
 | `NoteStateChanged(invoiceId, noteId, user, opened)` | `handleNoteStateChanged` | Upserts a `NoteOpenState` entity, id `{invoiceId}-{noteId}-{userAddress}` |
 
@@ -112,7 +112,7 @@ Every handler above except `InvoicePaid` also bumps the `GasPaid` singleton; eve
 - **Handler file:** `src/multi-sig.ts`
 
 | Event | Handler | Description |
-| :--- | :--- | :--- |
+| :--: | :--: | :--: |
 | `SignerAdded(signer)` | `handleSignerAdded` | Activates the `MultiSigSigner` (creates it if new), refreshes `MultiSigWallet` from live contract state |
 | `SignerRemoved(signer)` | `handleSignerRemoved` | Deactivates the `MultiSigSigner` |
 | `ThresholdUpdated(oldThreshold, newThreshold)` | `handleThresholdUpdated` | Updates `MultiSigWallet.threshold` |
@@ -129,7 +129,7 @@ Every handler above except `InvoicePaid` also bumps the `GasPaid` singleton; eve
 - **Handler file:** `src/oracle-manager.ts`
 
 | Event | Handler | Description |
-| :--- | :--- | :--- |
+| :--: | :--: | :--: |
 | `PriceFeedSet(token, aggregator, heartbeat)` | `handlePriceFeedSet` | Registers a `PaymentToken` if it doesn't already exist (no-op otherwise) |
 
 ---
@@ -141,7 +141,7 @@ Every handler above except `InvoicePaid` also bumps the `GasPaid` singleton; eve
 An immutable append-only log row, one per processor event. The `id` is `{txHash}-{logIndex}`.
 
 | Field | Type | Description |
-| :--- | :--- | :--- |
+| :--: | :--: | :--: |
 | `id` | `ID!` | `{txHash}-{logIndex}` |
 | `eventType` | `PaymentProcessorEventType!` | e.g. `INVOICE_CREATED`, `INVOICE_PAID`, `DISPUTE_SETTLED`, etc. |
 | `txHash` | `Bytes!` | Transaction hash |
@@ -154,7 +154,7 @@ An immutable append-only log row, one per processor event. The `id` is `{txHash}
 One invoice on the SimplePaymentProcessor contract. The `id` is the on-chain `invoiceId` (numeric string).
 
 | Field | Type | Description |
-| :--- | :--- | :--- |
+| :--: | :--: | :--: |
 | `id` | `ID!` | On-chain invoice ID |
 | `invoiceNonce` | `BigInt!` | Internal invoice nonce |
 | `state` | `SimplePaymentProcessorState!` | See [State Machine](#41-simple-payment-processor-states) |
@@ -174,7 +174,7 @@ One invoice on the SimplePaymentProcessor contract. The `id` is the on-chain `in
 One invoice on the AdvancedPaymentProcessor contract; supports multi-token payments and dispute resolution. The `id` is the on-chain `invoiceId`.
 
 | Field | Type | Description |
-| :--- | :--- | :--- |
+| :--: | :--: | :--: |
 | `id` | `ID!` | On-chain invoice ID |
 | `invoiceNonce` | `BigInt!` | Internal invoice nonce |
 | `state` | `AdvancedPaymentProcessorState!` | See [State Machine](#42-intermediated-payment-processor-states); no `LOCKED` state exists here |
@@ -199,7 +199,7 @@ One invoice on the AdvancedPaymentProcessor contract; supports multi-token payme
 Groups one or more `AdvancedPaymentProcessor` invoices into a single payable unit. The `id` is the `metaInvoiceId`.
 
 | Field | Type | Description |
-| :--- | :--- | :--- |
+| :--: | :--: | :--: |
 | `id` | `ID!` | On-chain meta-invoice ID |
 | `invoiceNonce` | `BigInt!` | Same value as `id` |
 | `buyer` | `User!` | Address that initiated the meta-invoice payment |
@@ -212,7 +212,7 @@ Groups one or more `AdvancedPaymentProcessor` invoices into a single payable uni
 A unique wallet address seen by either processor. The `id` is the hex address.
 
 | Field | Type | Description |
-| :--- | :--- | :--- |
+| :--: | :--: | :--: |
 | `id` | `ID!` | Wallet address (hex string) |
 | `lastActiveDay` | `BigInt` | UTC day index of last observed activity; used to emit at most one `ActiveUser` point per day |
 | `ownedSimpleInvoices` | `[SimplePaymentProcessor!]!` | Seller-side simple invoices |
@@ -226,7 +226,7 @@ A unique wallet address seen by either processor. The `id` is the hex address.
 Metadata for a token registered either via a payment or via `OracleManager.PriceFeedSet`. The `id` is the token's contract address (zero address = native ETH).
 
 | Field | Type | Description |
-| :--- | :--- | :--- |
+| :--: | :--: | :--: |
 | `id` | `ID!` | Token contract address, or zero address for ETH |
 | `name` | `String` | Token name |
 | `decimal` | `Int` | Token decimals |
@@ -257,7 +257,7 @@ See [core-contracts/multisig.sol.md](core-contracts/multisig.sol.md) for the ful
 Full detail lives in [`dashboard-metrics-technical-spec.md`](../dashboard-metrics-technical-spec.md) at the repo root; summary:
 
 | Entity | Purpose |
-| :--- | :--- |
+| :--: | :--: |
 | `PaymentVolume` / `VolumeStats` | Per-payment timeseries and daily-aggregated volume + cumulative paid-invoice count, per token |
 | `EscrowBalance` / `EscrowStat` | Signed escrow deltas (`balance`) and gross inflow (`amountPaid`), rolled up hourly/daily into `totalBalance`/`totalAmountPaid` |
 | `FeePaid` / `FeePaidStats` | Per-token protocol fee collection, daily-aggregated |
@@ -274,7 +274,7 @@ All timestamps are Unix seconds stored as `BigInt`.
 #### 4.1 Simple Payment Processor States
 
 | State | Meaning |
-| :--- | :--- |
+| :--: | :--: |
 | `CREATED` | Invoice created by seller, awaiting payment |
 | `PAID` | Buyer paid; seller must accept or reject within the decision window |
 | `ACCEPTED` | Seller accepted; funds enter hold period before release |
@@ -287,7 +287,7 @@ All timestamps are Unix seconds stored as `BigInt`.
 #### 4.2 Intermediated Payment Processor States
 
 | State | Meaning |
-| :--- | :--- |
+| :--: | :--: |
 | `CREATED` | Invoice created, awaiting payment |
 | `PAID` | Buyer paid; funds held in escrow |
 | `CANCELED` | Invoice canceled before payment |
