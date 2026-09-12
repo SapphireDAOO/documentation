@@ -2,7 +2,7 @@
 
 ### For Sellers
 
-Connect your wallet to SapphireDao. Navigate to **Create Invoice** to create an invoice. Enter the payment amount in ETH, set how long funds should stay in escrow after you accept payment (the escrow hold period; leave it at 0 to make funds releasable immediately on acceptance), optionally add a [note](notes.md), and submit the Invoice. The system generates a payment link, and a QR code to share with the Buyer. The hold period is fixed once the invoice is created and cannot be changed afterwards by anyone, including the platform admin.
+Connect your wallet to SapphireDao. Navigate to **Create Invoice** to create an invoice. Enter the payment amount in ETH, optionally add a [note](notes.md), and submit the Invoice. The system generates a payment link, and a QR code to share with the Buyer. There is nothing to configure about escrow timing: the escrow hold period is the same for every Simple Processor invoice, fixed when the contract was deployed, and cannot be changed by the seller, the buyer, or the platform admin.
 
 Track invoices on the dashboard’s Invoice Cards, where users can monitor status like
 
@@ -18,18 +18,18 @@ Track invoices on the dashboard’s Invoice Cards, where users can monitor statu
 
 When the Buyer makes payment, the funds are held in escrow. After reviewing the payment, the seller decides whether to accept it and moves the invoice to the hold period, rejecting it to refund the Buyer. The seller has a limited time window to take action; if no action is taken within that period, the escrow funds are automatically refunded to the Buyer.
 
-Once the payment is accepted, the release time is set to acceptance time plus the hold period the seller chose when creating the invoice; this period cannot be changed by anyone after creation, including the platform admin. After this period, the funds are released automatically to the seller, and the invoice status updates to Released once the release is triggered.
+Once the payment is accepted, the release time is set to acceptance time plus the processor's fixed escrow hold period; that period cannot be changed by anyone, including the platform admin. After this period, the funds are released automatically to the seller, and the invoice status updates to Released once the release is triggered.
 
 {% hint style="info" %}
 **Key Considerations for Sellers**
 
-- The escrow hold period is set by you when you create the invoice and is locked in from that point on; it cannot be adjusted later, even by the platform admin.
+- The escrow hold period is the same for every invoice on this processor and is fixed at deployment; neither you nor the platform admin can adjust it.
 - Invoices expire if not paid within a limited time.
   {% endhint %}
 
 ### For Buyers
 
-The seller provides a QR code or payment link, which displays the invoice details, including the amount in ETH, the escrow hold period and any notes shared by the seller. The buyer pays the invoice in ETH using a cryptocurrency wallet, and also has the option to add a note (for example, a payment reference or message). Once the transaction is confirmed, the invoice status updates to **Paid**.
+The seller provides a QR code or payment link, which displays the invoice details, including the amount in ETH, the escrow hold period that will apply, and any notes shared by the seller. The buyer pays the invoice in ETH using a cryptocurrency wallet, and also has the option to add a note (for example, a payment reference or message). Once the transaction is confirmed, the invoice status updates to **Paid**.
 
 {% hint style="info" %}
 Key Consideration for Buyers
@@ -40,8 +40,8 @@ Key Consideration for Buyers
 
 ### How the Process Works
 
-SapphireDao generates a unique URL and QR code, which the Seller shares with the Buyer after the Seller creates an invoice with the required information, including the escrow hold period. The invoice is updated to Paid when the Buyer makes payment using the link or QR code, payment to escrow. After reviewing the payment, the Seller has a limited time to decide whether to accept or reject it; if no action is taken, the money is returned. After acceptance, funds are moved to the Seller's wallet once the seller-chosen hold period elapses, and the invoice is marked as released.
+SapphireDao generates a unique URL and QR code, which the Seller shares with the Buyer after the Seller creates an invoice with the required information. The invoice is updated to Paid when the Buyer makes payment using the link or QR code, payment to escrow. After reviewing the payment, the Seller has a limited time to decide whether to accept or reject it; if no action is taken, the money is returned. After acceptance, funds are moved to the Seller's wallet once the escrow hold period elapses, and the invoice is marked as released.
 
 ### Important Notes
 
-The escrow hold period is fixed by the seller when the invoice is created and cannot be adjusted afterwards by anyone, including the platform admin. Funds are held securely in an escrow wallet until conditions are met. Seller action windows and other time limits are enforced by the smart contract and are displayed on the dashboard.
+The escrow hold period is fixed on the contract at deployment and applies identically to every invoice; it cannot be adjusted afterwards by anyone, including the platform admin. Funds are held securely in an escrow wallet until conditions are met. Seller action windows and other time limits are enforced by the smart contract and are displayed on the dashboard.
