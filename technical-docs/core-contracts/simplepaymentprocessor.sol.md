@@ -127,12 +127,20 @@ Reference to the external Payment Processor storage contract.
 IPaymentProcessorStorage public immutable PP_STORAGE
 ```
 
-#### WETH
+#### ESCROW_HOLD_PERIOD
 
-Wrapped native token the platform fee is paid in. See [release](#release).
+Seconds an escrow holds a payment after the seller accepts it, before it can be released. Fixed at deployment and applied to every invoice this processor creates; there is no setter, and sellers cannot choose their own. Must be non-zero at construction.
 
 ```solidity
-IWETH public immutable WETH
+uint32 public immutable ESCROW_HOLD_PERIOD
+```
+
+#### AUTOMATION
+
+Address of the [PaymentAutomation.sol](paymentautomation.sol.md) adapter allowed to drive `processDueTasks` on a keeper's behalf. Fixed at construction; there is no setter.
+
+```solidity
+address public immutable AUTOMATION
 ```
 
 ### Functions
@@ -141,7 +149,7 @@ IWETH public immutable WETH
 
 Initializes the payment processor with the contracts it is permanently paired with.
 
-Sets `PP_STORAGE`, `notes`, `WETH`, and `automation`. Every dependency here is immutable; changing one means redeploying the processor. The minimum invoice value and decision window are no longer constructor parameters: they are the fixed constants `MINIMUM_INVOICE_VALUE` and `SELLER_DEFAULT_DECISION_WINDOW`. Fee rate and fee receiver live in `PP_STORAGE`, not here.
+Sets `PP_STORAGE`, the notes contract, `AUTOMATION`, and `ESCROW_HOLD_PERIOD`. Every dependency here is immutable; changing one means redeploying the processor. Reverts with `InvalidHoldPeriod` if `_escrowHoldPeriod` is zero. The minimum invoice value and decision window are not constructor parameters: they are the fixed constants `MINIMUM_INVOICE_VALUE` and `SELLER_DEFAULT_DECISION_WINDOW`. The fee rate, the fee receiver, and the WETH address the platform fee is paid in all live in `PP_STORAGE`, not here; this contract reads `PP_STORAGE.WETH()` when it pays a fee.
 
 The `automation` address is not optional and cannot be attached later: it must be supplied at construction, predicted via `MasterDeployer`'s CREATE2 scheme before [PaymentAutomation.sol](paymentautomation.sol.md) itself is deployed, since the two contracts hold each other's address as immutables (see [MasterDeployer.sol](masterdeployer.sol.md#deploycore)).
 
@@ -149,8 +157,8 @@ The `automation` address is not optional and cannot be attached later: it must b
 constructor(
     address _paymentProcessorStorageAddress,
     address _notesAddress,
-    address _wethAddress,
-    address _automationAddress
+    address _automationAddress,
+    uint32 _escrowHoldPeriod
 );
 ```
 
@@ -160,8 +168,8 @@ constructor(
 | :-------------------------------: | :-------: | :-----------------------------------------------------------: |
 | `_paymentProcessorStorageAddress` | `address` | The address of the shared payment processor storage contract. |
 |          `_notesAddress`          | `address` |     Address of the notes contract used for invoice notes.     |
-|          `_wethAddress`           | `address` |     Address of the wrapped native token the platform fee is paid in.     |
 |        `_automationAddress`       | `address` |     The keeper adapter allowed to drive `processDueTasks`.     |
+|       `_escrowHoldPeriod`         | `uint32`  |  Seconds an escrow holds a payment before release. Must be non-zero.  |
 
 #### receive
 
@@ -175,10 +183,12 @@ receive() external payable;
 
 #### createInvoice
 
-Creates a new invoice with a specified price and escrow hold period.
+Creates a new invoice with a specified price.
+
+The escrow hold period is not a parameter: every invoice this processor creates uses `ESCROW_HOLD_PERIOD`, fixed at deployment. Reverts with `ValueIsTooLow` when `_price` is below `MINIMUM_INVOICE_VALUE`.
 
 ```solidity
-function createInvoice(uint256 _price, uint32 _holdPeriod, bytes memory _storageRef, bool _share)
+function createInvoice(uint256 _price, bytes memory _storageRef, bool _share)
     public
     whenNotPaused
     returns (uint216 invoiceId);
@@ -189,7 +199,6 @@ function createInvoice(uint256 _price, uint32 _holdPeriod, bytes memory _storage
 |     Name      |   Type    |                                                     Description                                                      |
 | :-----------: | :-------: | :------------------------------------------------------------------------------------------------------------------: |
 |   `_price`    | `uint256` |                                           The price of the invoice in wei.                                           |
-| `_holdPeriod` | `uint32`  | How long (in seconds) funds stay in escrow after the seller accepts payment. `0` releases immediately on acceptance. |
 | `_storageRef` |  `bytes`  |                                A bytes-encoded reference to the user's notes storage.                                |
 |   `_share`    |  `bool`   |                                     Whether the note is shared with non-authors.                                     |
 
@@ -231,7 +240,7 @@ function pay(uint216 _invoiceId, bytes memory _storageRef, bool _share)
 
 Marks the specified invoice as accepted.
 
-This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event, carrying the computed `releaseAt`. Only callable by the invoice's seller, and only while the invoice is `PAID` and within the acceptance window; reverts with `AcceptanceWindowExceeded` once that window has passed. `releaseAt` is set to `block.timestamp + escrowHoldPeriod`, using the hold period fixed on the invoice at creation, and the heap entry is rescheduled from `sellerActionDeadline` to `releaseAt`. `_feeReceiver` is recorded on the invoice and paid the platform fee on release, so it must be authorized by the fee signer via `_data`: reverts with `InvalidFeeReceiver` if `_feeReceiver` is the zero address, or `InvalidFeeAuthorization` if `_data` isn't a valid signature from [`PaymentProcessorStorage`'s fee signer](paymentprocessorstorage.sol.md#setfeesigner) over this invoice and receiver (see [FeeAuthorizationLib](../library/feeauthorizationlib.sol.md)).
+This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event, carrying the computed `releaseAt`. Only callable by the invoice's seller, and only while the invoice is `PAID` and within the acceptance window; reverts with `AcceptanceWindowExceeded` once that window has passed. `releaseAt` is set to `block.timestamp + ESCROW_HOLD_PERIOD`, using the hold period fixed at deployment, and the heap entry is rescheduled from `sellerActionDeadline` to `releaseAt`. `_feeReceiver` is recorded on the invoice and paid the platform fee on release, so it must be authorized by the fee signer via `_data`: reverts with `InvalidFeeReceiver` if `_feeReceiver` is the zero address, or `InvalidFeeAuthorization` if `_data` isn't a valid signature from [`PaymentProcessorStorage`'s fee signer](paymentprocessorstorage.sol.md#setfeesigner) over this invoice and receiver (see [FeeAuthorizationLib](../library/feeauthorizationlib.sol.md)).
 
 ```solidity
 function acceptPayment(uint216 _invoiceId, address _feeReceiver, bytes memory _data) public whenNotPaused;
@@ -281,7 +290,7 @@ function cancelInvoice(uint216 _invoiceId) external;
 
 Releases the funds held in escrow for a specific invoice to the seller.
 
-Only callable by the seller. Invoice must be in `ACCEPTED` state (reverts `InvalidInvoiceState` otherwise) and `releaseAt` must have passed (reverts `HoldPeriodHasNotBeenExceeded` otherwise). Deducts the platform fee before transferring the net amount to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global rate, so a later change to the global rate never affects an already-created invoice. The seller is paid in native currency; the fee is pulled from escrow as native currency, wrapped into `WETH`, and sent to the fee receiver as WETH, so a receiver that rejects native transfers is still paid. The fee receiver is the one authorized at acceptance (`feeReceiver`), falling back to [`PaymentProcessorStorage`'s global fee receiver](paymentprocessorstorage.sol.md#getfeereceiver) for invoices accepted before this feature existed.
+Only callable by the seller. Invoice must be in `ACCEPTED` state (reverts `InvalidInvoiceState` otherwise) and `releaseAt` must have passed (reverts `HoldPeriodHasNotBeenExceeded` otherwise). Deducts the platform fee before transferring the net amount to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global rate, so a later change to the global rate never affects an already-created invoice. The seller is paid in native currency; the fee is pulled from escrow as native currency, wrapped into the WETH contract [configured on `PaymentProcessorStorage`](paymentprocessorstorage.sol.md#weth), and sent to the fee receiver as WETH, so a receiver that rejects native transfers is still paid. The fee receiver is the one authorized at acceptance (`feeReceiver`), falling back to [`PaymentProcessorStorage`'s global fee receiver](paymentprocessorstorage.sol.md#fee_receiver) for invoices accepted before this feature existed.
 
 ```solidity
 function release(uint216 _invoiceId) public whenNotPaused;
@@ -355,34 +364,6 @@ function calculateFee(uint256 _amount) public view returns (uint256 feeValue);
 | :--------: | :-------: | :------------------------: |
 | `feeValue` | `uint256` | The calculated fee amount. |
 
-#### getAutomation
-
-Returns the address of the registered automation adapter. Fixed at construction as an immutable; there is no setter.
-
-```solidity
-function getAutomation() external view returns (address automationAddress);
-```
-
-**Returns**
-
-|        Name         |   Type    |                Description                 |
-| :-----------------: | :-------: | :----------------------------------------: |
-| `automationAddress` | `address` | The configured automation adapter address. |
-
-#### getDecisionWindow
-
-Returns the window sellers have to accept or reject a payment after the buyer pays. Always returns `SELLER_DEFAULT_DECISION_WINDOW`; there is no setter.
-
-```solidity
-function getDecisionWindow() external view returns (uint256 decisionWindowValue);
-```
-
-**Returns**
-
-|         Name          |   Type    |               Description               |
-| :-------------------: | :-------: | :-------------------------------------: |
-| `decisionWindowValue` | `uint256` | The current decision window in seconds. |
-
 #### getNextInvoiceNonce
 
 Gets the current invoice nonce counter.
@@ -417,35 +398,22 @@ function getInvoiceData(uint216 _invoiceId) public view returns (Invoice memory 
 | :--: | :-------: | :---------------: |
 | `i`  | `Invoice` | The invoice data. |
 
-#### getMinimumInvoiceValue
-
-Returns the minimum allowed invoice value required for invoice creation. Always returns `MINIMUM_INVOICE_VALUE`; there is no setter.
-
-```solidity
-function getMinimumInvoiceValue() external view returns (uint256 minimumValue);
-```
-
-**Returns**
-
-|      Name      |   Type    |            Description             |
-| :------------: | :-------: | :--------------------------------: |
-| `minimumValue` | `uint256` | The minimum allowed invoice value. |
-
 #### getItems
 
-Returns a list of all task IDs currently in the heap.
+Returns every scheduled task currently in the heap, together with the time each one is due.
 
-Retrieves the uint216 task identifiers extracted from the internal encoded heap structure.
+The two arrays are index-aligned: `dueAt[i]` is the due timestamp of `id[i]`. Items come back in heap order, not sorted by due time; sort off-chain if you need them in order. See [TaskQueueLib.getItems](../library/taskqueuelib.sol.md#getitems).
 
 ```solidity
-function getItems() external view returns (uint216[] memory items);
+function getItems() external view returns (uint216[] memory id, uint40[] memory dueAt);
 ```
 
 **Returns**
 
-|  Name   |    Type     |    Description     |
-| :-----: | :---------: | :----------------: |
-| `items` | `uint216[]` | Array of task IDs. |
+|  Name   |    Type     |                        Description                         |
+| :-----: | :---------: | :--------------------------------------------------------: |
+|  `id`   | `uint216[]` |                    Array of task IDs.                      |
+| `dueAt` | `uint40[]`  | Each task's due timestamp, index-aligned with `id`. |
 
 ### Structs
 
@@ -461,7 +429,6 @@ struct Invoice {
     uint40 releaseAt;
     uint40 expiresAt;
     uint40 sellerActionDeadline;
-    uint32 escrowHoldPeriod;
     uint8 state;
     uint8 withdrawalRetries;
     uint16 feeRate;
@@ -482,7 +449,6 @@ struct Invoice {
 |       `releaseAt`      | `uint40`  |                                                        The timestamp when funds in escrow can be released to the seller.                                                         |
 |       `expiresAt`      | `uint40`  |                                                            The timestamp after which the invoice can no longer be paid.                                                          |
 | `sellerActionDeadline` | `uint40`  |                                    The timestamp after which the seller can no longer take action (accept/reject), and the buyer is refunded.                                    |
-|   `escrowHoldPeriod`   | `uint32`  |           Escrow hold duration (in seconds) set by the seller at creation, counted from acceptance. `0` means funds are releasable as soon as the payment is accepted.           |
 |         `state`        |  `uint8`  |                                                                        The current state of the invoice.                                                                         |
 | `withdrawalRetries` |  `uint8`  |                                Number of failed `IEscrow.withdraw` attempts by the automation path. Packed with `state` in the same storage slot.                                |
 |      `feeRate`      | `uint16`  | The platform fee rate (in basis points) captured at invoice creation. Releases always charge this rate, so later changes to the global fee rate do not affect existing invoices. |
@@ -637,6 +603,7 @@ event PaymentBurned(uint216 indexed invoiceId, uint256 amount);
 
 |                           Error                            |                                                 Description                                                 |
 | :--------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------: |
+|                  `InvalidHoldPeriod()`                     |                     Thrown when the contract is deployed with a zero escrow hold period.                    |
 |                     `NotAuthorized()`                      |                        Thrown when the caller lacks the required role or permission.                        |
 |                     `ValueIsTooLow()`                      |                     Thrown when the provided value is lower than the required minimum.                      |
 |                  `InvalidHeapPosition()`                   |                                 Thrown when a task's heap index is invalid.                                 |

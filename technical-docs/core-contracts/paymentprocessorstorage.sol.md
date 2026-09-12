@@ -16,6 +16,8 @@ PaymentProcessorStorage.sol enables:
 
 ### State Variables
 
+Every value below is `public`, so each one is readable through its Solidity-generated getter (`FEE_RATE()`, `GAS_THRESHOLD()`, `DEFAULT_PAYMENT_VALIDITY_PERIOD()`, `FEE_RECEIVER()`, `WETH()`). The `getFeeRate`, `getGasThreshold`, `getPaymentValidityDuration`, and `getFeeReceiver` wrappers that used to front these values are gone; read them through the generated getters instead.
+
 #### DEFAULT_PAYMENT_VALIDITY_PERIOD
 
 Default time window during which a created invoice remains valid for payment.
@@ -56,13 +58,29 @@ Minimum gas that must remain to continue processing automated tasks. Fixed at co
 uint96 public constant GAS_THRESHOLD = 100_000
 ```
 
+#### FEE_RECEIVER
+
+Address that receives collected platform fees. Fixed at construction; there is no setter.
+
+```solidity
+address public immutable FEE_RECEIVER
+```
+
+#### WETH
+
+Wrapped native token both processors pay platform fees in. Fixed at construction and rejected if zero (`InvalidWeth`); there is no setter. Both [SimplePaymentProcessor.sol](simplepaymentprocessor.sol.md#release) and [IntermediatedPaymentProcessor.sol](intermediatedpaymentprocessor.sol.md#release) read this address when a fee comes out of a native escrow, wrap the fee, and pay the receiver in WETH.
+
+```solidity
+address public immutable WETH
+```
+
 ### Functions
 
 #### constructor
 
 Initializes the contract with the given configuration.
 
-Sets the contract owner, records `feeReceiver` and `intermediatedPlatformsOperator`, and initializes the invoice nonce counter. Also fetches the addresses to authorize from its deployer: `msg.sender` must implement [`IAuthorizedAddressProvider`](masterdeployer.sol.md#related-interface-iauthorizedaddressprovider) (in practice, [MasterDeployer.sol](masterdeployer.sol.md)), and this contract calls `authorizedAddresses()` on it once, at construction, emitting `AuthorizationUpdated` for each address returned. Keeping this list out of the constructor arguments keeps it out of the CREATE2 init code, so this contract's address is predictable before the authorized processors are deployed. Authorization is fixed here, at deployment, and cannot be changed afterwards; there is no setter. `feeReceiver` is likewise fixed at construction as an immutable; only `intermediatedPlatformsOperator` and `feeSigner` remain settable after deployment (via [setIntermediatedPlatformsOperator](#setintermediatedplatformsoperator) and [setFeeSigner](#setfeesigner)).
+Sets the contract owner, records `feeReceiver`, `weth`, and `intermediatedPlatformsOperator`, and initializes the invoice nonce counter. Reverts with `InvalidWeth` if `weth` is the zero address. Also fetches the addresses to authorize from its deployer: `msg.sender` must implement [`IAuthorizedAddressProvider`](masterdeployer.sol.md#related-interface-iauthorizedaddressprovider) (in practice, [MasterDeployer.sol](masterdeployer.sol.md)), and this contract calls `authorizedAddresses()` on it once, at construction, emitting `AuthorizationUpdated` for each address returned. Keeping this list out of the constructor arguments keeps it out of the CREATE2 init code, so this contract's address is predictable before the authorized processors are deployed. Authorization is fixed here, at deployment, and cannot be changed afterwards; there is no setter. `feeReceiver` and `weth` are likewise fixed at construction as immutables; only `intermediatedPlatformsOperator` and `feeSigner` remain settable after deployment (via [setIntermediatedPlatformsOperator](#setintermediatedplatformsoperator) and [setFeeSigner](#setfeesigner)).
 
 ```solidity
 constructor(Configuration memory _configuration) ;
@@ -72,7 +90,7 @@ constructor(Configuration memory _configuration) ;
 
 |       Name       |      Type       |                                      Description                                      |
 | :--------------: | :-------------: | :-----------------------------------------------------------------------------------: |
-| `_configuration` | `Configuration` | The initial configuration: owner, fee receiver, and intermediated platforms operator. |
+| `_configuration` | `Configuration` | The initial configuration: owner, fee receiver, intermediated platforms operator, and WETH address. |
 
 #### updateInvoiceNonce
 
@@ -228,20 +246,6 @@ function getEmergencyPauseExpiry() external view returns (uint256 expiry);
 | :------: | :-------: | :------------------------------------------------------------: |
 | `expiry` | `uint256` | The expiry timestamp, or 0 when no emergency pause is pending. |
 
-#### getPaymentValidityDuration
-
-Returns the payment window: how long a newly created invoice stays payable before it expires unpaid. Always returns `DEFAULT_PAYMENT_VALIDITY_PERIOD` (7 days); there is no setter.
-
-```solidity
-function getPaymentValidityDuration() external view returns (uint256 validDuration);
-```
-
-**Returns**
-
-|      Name       |   Type    |                Description                |
-| :-------------: | :-------: | :---------------------------------------: |
-| `validDuration` | `uint256` | The payment validity duration in seconds. |
-
 #### getNextInvoiceNonce
 
 Returns the nonce that will be assigned to the next invoice.
@@ -269,34 +273,6 @@ function totalInvoiceCreated() public view returns (uint216 totalInvoices);
 |      Name       |   Type    |              Description              |
 | :-------------: | :-------: | :-----------------------------------: |
 | `totalInvoices` | `uint216` | The total number of invoices created. |
-
-#### getFeeRate
-
-Returns the platform fee rate in basis points. Always returns `FEE_RATE`; there is no setter.
-
-```solidity
-function getFeeRate() external view returns (uint256 feeRate);
-```
-
-**Returns**
-
-|   Name    |   Type    |              Description               |
-| :-------: | :-------: | :------------------------------------: |
-| `feeRate` | `uint256` | The platform fee rate in basis points. |
-
-#### getFeeReceiver
-
-Returns the address that receives collected platform fees. Fixed at construction as an immutable; there is no setter.
-
-```solidity
-function getFeeReceiver() external view returns (address feeReceiver);
-```
-
-**Returns**
-
-|     Name      |   Type    |        Description        |
-| :-----------: | :-------: | :-----------------------: |
-| `feeReceiver` | `address` | The fee receiver address. |
 
 #### getFeeSigner
 
@@ -326,33 +302,18 @@ function getIntermediatedPlatformsOperator() external view returns (address inte
 | :-------------------------------: | :-------: | :--------------------------------------------: |
 | `intermediatedPlatformsOperator` | `address` | The Intermediated Platforms Operator address. |
 
-#### getGasThreshold
-
-Returns the gas threshold used to limit the execution loop in automated task processing. Always returns `GAS_THRESHOLD`; there is no setter.
-
-This threshold is typically used to prevent out-of-gas errors during batch operations triggered by the Chainlink CRE workflow.
-
-```solidity
-function getGasThreshold() external view returns (uint256 gasThreshold);
-```
-
-**Returns**
-
-|      Name      |   Type    |           Description            |
-| :------------: | :-------: | :------------------------------: |
-| `gasThreshold` | `uint256` | The current gas threshold value. |
-
 ### Structs
 
 #### Configuration
 
-Holds the addresses the contract is permanently configured with. Every field becomes an immutable or fixed at construction; the fee rate and gas threshold are no longer part of this struct since they are now compile-time constants (`FEE_RATE`, `GAS_THRESHOLD`) on the contract itself.
+Holds the addresses the contract is permanently configured with. Every field becomes an immutable or is fixed at construction; the fee rate and gas threshold are not part of this struct since they are compile-time constants (`FEE_RATE`, `GAS_THRESHOLD`) on the contract itself.
 
 ```solidity
 struct Configuration {
     address owner;
     address feeReceiver;
     address intermediatedPlatformsOperator;
+    address weth;
 }
 ```
 
@@ -361,6 +322,7 @@ struct Configuration {
 |       `owner`       | `address` |               The address authorized to pause and to set the emergency pauser.                |
 |    `feeReceiver`    | `address` |                          Address that receives platform fees.                           |
 | `intermediatedPlatformsOperator` | `address` | Address authorized to interact with invoice creation and specific management functions. |
+|       `weth`        | `address` |     Wrapped native token both processors pay platform fees in. Cannot be the zero address.     |
 
 ### Events
 
@@ -480,6 +442,7 @@ event EmergencyPauserUpdated(address indexed emergencyPauser);
 | :------------------------: | :---------------------------------------------------------------------------------------------: |
 |     `NotAuthorized()`      |           Thrown when a caller attempts an action without the required authorization.           |
 |    `InvalidFeeSigner()`    |                    Thrown when setting the fee signer to the zero address.                       |
+|      `InvalidWeth()`       |          Thrown when deploying with the zero address as the wrapped native token.                |
 |     `InvalidFeeRate()`     |   Declared but never thrown; `FEE_RATE` is a fixed constant now, so there is nothing left to validate.   |
 |     `AlreadyPaused()`      | Thrown when pausing a system that is already paused, or that has an unresolved emergency pause. |
 |       `NotPaused()`        |                       Thrown when unpausing a system that is not paused.                        |

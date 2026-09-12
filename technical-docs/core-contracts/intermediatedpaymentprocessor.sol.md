@@ -123,7 +123,7 @@ uint8 constant DEFAULT_DECIMAL = 18;
 
 #### DEFAULT\_MINIMUM\_INVOICE\_PRICE
 
-Minimum invoice price applied when none is explicitly set (1 USD in 8-decimal Chainlink format).
+Minimum USD price an invoice must meet to be created, in 8-decimal Chainlink format (1 USD). Fixed at compile time; there is no getter and no setter, and a lower price reverts with `PriceIsTooLow`.
 
 ```solidity
 uint256 constant DEFAULT_MINIMUM_INVOICE_PRICE = 1e8;
@@ -145,6 +145,16 @@ constructor(address _paymentProcessorStorageAddress, address _oracle) ;
 | :-------------------------------: | :-------: | :-----------------------------------------------------------: |
 | `_paymentProcessorStorageAddress` | `address` | The address of the shared payment processor storage contract. |
 |            `_oracle`              | `address` | The address of the OracleManager contract for price feeds.    |
+
+#### receive
+
+Accepts the native platform fee pulled out of an escrow on its way to being wrapped into WETH.
+
+Reverts with `UnexpectedNativeTransfer` for any other incoming transfer, so native currency cannot be stranded on this contract; value is only accepted while a fee is in flight during [release](#release) or a dispute settlement.
+
+```solidity
+receive() external payable;
+```
 
 #### createSingleInvoice
 
@@ -313,7 +323,7 @@ function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerSha
 
 Releases escrowed funds to the seller after the release window has passed.
 
-Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global fee rate, so a later change to the global rate never affects an already-created invoice. The fee is paid to the fee receiver authorized when the invoice was paid (`feeReceiver`), including sub-invoices paid through a meta-invoice, each of which carries its own; the fallback to [`PaymentProcessorStorage`'s global fee receiver](paymentprocessorstorage.sol.md#getfeereceiver) only covers invoices paid before per-invoice receivers existed. The invoice transitions to RELEASED and its balance is zeroed. There is no heap; this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
+Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global fee rate, so a later change to the global rate never affects an already-created invoice. The fee is paid to the fee receiver authorized when the invoice was paid (`feeReceiver`), including sub-invoices paid through a meta-invoice, each of which carries its own; the fallback to [`PaymentProcessorStorage`'s global fee receiver](paymentprocessorstorage.sol.md#fee_receiver) only covers invoices paid before per-invoice receivers existed. The seller is paid in the invoice's payment token. The fee is paid in that token too when the escrow holds an ERC20; when the escrow holds native currency the fee is pulled out, wrapped into the WETH contract [configured on `PaymentProcessorStorage`](paymentprocessorstorage.sol.md#weth), and sent on as WETH, so a receiver that rejects native transfers is still paid. The invoice transitions to RELEASED and its balance is zeroed. There is no heap; this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
 
 ```solidity
 function release(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator whenNotPaused;
@@ -327,7 +337,7 @@ function release(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator
 
 #### refund
 
-Issues a partial or full refund for a paid invoice. Callable only by the intermediated platform; invoice must be in the PAID state. `_refundShare` must be between 1 and 10,000 basis points. A full refund (10,000 BPS) transitions the invoice to REFUNDED; a partial refund reduces the escrow balance but leaves the invoice in PAID state so it can still be released later.
+Issues a partial or full refund for a paid invoice. Callable only by the intermediated platform; invoice must be in the PAID state. `_refundShare` must be between 1 and 10,000 basis points. A full refund (10,000 BPS) transitions the invoice to REFUNDED; a partial refund reduces the escrow balance but leaves the invoice in PAID state so it can still be released later. The platform fee taken on the refunded portion follows the same path as on [release](#release): paid in the escrowed ERC20, or wrapped into WETH when the escrow holds native currency.
 
 ```solidity
 function refund(uint216 _invoiceId, uint256 _refundShare) external onlyIntermediatedPlatformsOperator whenNotPaused;
@@ -388,20 +398,6 @@ function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external
 | :-----------: | :-------: | :------------------------------------------------------------------: |
 |  `_invoiceId` | `uint216` |                   The ID of the invoice to update.                   |
 | `_holdPeriod` | `uint256` | Additional hold period (in seconds) to add to the current timestamp. |
-
-#### getMinimumPrice
-
-Returns the minimum USD price an invoice must meet to be created. Always returns `DEFAULT_MINIMUM_INVOICE_PRICE`; there is no setter.
-
-```solidity
-function getMinimumPrice() external view returns (uint256 minimumPrice);
-```
-
-**Returns**
-
-|       Name      |    Type   |                         Description                        |
-| :-------------: | :-------: | :--------------------------------------------------------: |
-| `minimumPrice`  | `uint256` | The current minimum price threshold (8 decimals). |
 
 #### getTokenValueFromUsd
 
@@ -576,8 +572,8 @@ struct Invoice {
     uint40 expiresAt;
     uint8 state;
     uint8 withdrawalRetries;
-    uint32 escrowHoldPeriod;
     uint16 feeRate;
+    uint32 holdPeriod;
     uint216 metaInvoiceId;
     address buyer;
     address seller;
@@ -599,8 +595,8 @@ struct Invoice {
 |       `expiresAt`      |  `uint40` |                                     The timestamp after which the invoice is no longer payable.                          |
 |         `state`        |  `uint8`  |                                                 Current state of the invoice.                                            |
 |  `withdrawalRetries`   |  `uint8`  | Reserved retry counter retained for storage-layout compatibility; unused now that releases are manual. Packed with `state`. |
-|   `escrowHoldPeriod`   | `uint32`  | Custom hold duration (in seconds) between payment and release, set at invoice creation. |
 |       `feeRate`        | `uint16`  | The platform fee rate (in basis points) captured at invoice creation. Releases and dispute settlements always charge this rate, so later changes to the global fee rate do not affect existing invoices. |
+|      `holdPeriod`      | `uint32`  | Seconds the escrow holds the payment after it is paid, set at invoice creation. `releaseAt` is derived from it when the invoice is paid. |
 |     `metaInvoiceId`    | `uint216` |              Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.                        |
 |         `buyer`        | `address` |                                              Address of the buyer.                                                       |
 |        `seller`        | `address` |                                              Address of the seller.                                                      |
@@ -636,7 +632,7 @@ struct InvoiceCreationParam {
     string invoiceId;
     address seller;
     uint256 price;
-    uint32 escrowHoldPeriod;
+    uint32 holdPeriod;
     address[] paymentTokens;
 }
 ```
@@ -646,7 +642,7 @@ struct InvoiceCreationParam {
 |     `invoiceId`     |  `string` |             A unique string identifier for the invoice, provided by the caller and hashed for use in the contract.   |
 |       `seller`      | `address` |                                          Address of the seller.                                          |
 |       `price`       | `uint256` |                     Price or amount to be paid for the invoice in USD (8 decimals).                     |
-| `escrowHoldPeriod`  |  `uint32` |            Duration (in seconds) that the escrow will lock the payment before it's releasable. Must be non-zero; reverts `HoldPeriodCanNotBeZero` otherwise.          |
+|    `holdPeriod`     |  `uint32` |            Seconds the escrow holds the payment after it is paid, before it is releasable. Must be non-zero; reverts `HoldPeriodCanNotBeZero` otherwise.          |
 | `paymentTokens`    | `address[]` | The tokens this invoice accepts as payment. Must hold at least one entry (reverts `NoPaymentTokens` otherwise); include `address(0)` to accept native currency. Fixed at creation; a buyer paying with any other token reverts `PaymentTokenNotAllowed`. |
 
 ### Events
@@ -880,4 +876,5 @@ event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint2
 | `InvalidSellersPayoutShare()` | Thrown when the seller's payout share exceeds the allowed limit (10000 BPS). |
 | `InvalidSeller()` | Thrown when an invoice is created with the zero address as the seller. |
 | `EscrowWithdrawFailed()` | Thrown when the escrow contract fails to execute a withdrawal. |
+| `UnexpectedNativeTransfer()` | Thrown when native currency is sent to the processor outside of a fee being wrapped into WETH. |
 | `InvalidOracle()` | Declared but never thrown; `ORACLE` is fixed at construction now, with no setter left to validate against. |

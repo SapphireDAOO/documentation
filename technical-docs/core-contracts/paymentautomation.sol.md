@@ -19,6 +19,22 @@ The payment processor whose due-task queue this contract drives.
 ISimplePaymentProcessor public immutable PROCESSOR
 ```
 
+#### FORWARDER
+
+CRE forwarder contract allowed to deliver reports to [onReport](#onreport). Fixed at construction; there is no setter, so enabling or rotating the CRE keeper path means redeploying this contract.
+
+```solidity
+address public immutable FORWARDER
+```
+
+#### WORKFLOW_OWNER
+
+CRE workflow owner authorized to trigger [onReport](#onreport), checked against the report metadata. Fixed at construction; there is no setter.
+
+```solidity
+address public immutable WORKFLOW_OWNER
+```
+
 #### PP_STORAGE
 
 Reference to the external Payment Processor storage contract, used for owner checks.
@@ -124,34 +140,6 @@ function supportsInterface(bytes4 _interfaceId) external pure returns (bool supp
 |    Name    |  Type  |                                     Description                                    |
 | :-----------: | :----: | :---------------------------------------------------------------------------------: |
 | `supported` | `bool` | True for `IReceiver` and `IERC165` interface IDs; false otherwise. |
-
-#### getForwarder
-
-Returns the address of the configured CRE forwarder contract. Fixed at construction as an immutable; there is no setter, so enabling or rotating the CRE keeper path requires redeploying this contract.
-
-```solidity
-function getForwarder() external view returns (address forwarderAddress);
-```
-
-**Returns**
-
-|        Name        |    Type   |            Description            |
-| :----------------: | :-------: | :-------------------------------: |
-| `forwarderAddress` | `address` | The configured forwarder address. |
-
-#### getWorkflowOwner
-
-Returns the CRE workflow owner authorized to trigger `onReport`. Fixed at construction as an immutable; there is no setter.
-
-```solidity
-function getWorkflowOwner() external view returns (address workflowOwnerAddress);
-```
-
-**Returns**
-
-|          Name          |    Type   |              Description              |
-| :------------------------: | :-------: | :----------------------------------------: |
-| `workflowOwnerAddress` | `address` | The authorized workflow owner address. |
 
 ### Events
 

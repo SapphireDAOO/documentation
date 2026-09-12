@@ -237,7 +237,7 @@ Parameters for the full system deployment, shared by both `deployCore` and `depl
 struct Params {
     bytes32 salt;
     IPaymentProcessorStorage.Configuration config;
-    address weth;
+    uint32 escrowHoldPeriod;
     address sequencerUptimeFeed;
     address forwarder;
     address workflowOwner;
@@ -250,14 +250,14 @@ struct Params {
 | :------------------------: | :--------------------------------------------------: | :--------------------------------------------------------------------------: |
 |          `salt`          |                     `bytes32`                     |               The CREATE2 salt used for every deployment.                |
 |         `config`         | `IPaymentProcessorStorage.Configuration` |         The initial `PaymentProcessorStorage` configuration.          |
-|          `weth`          |                     `address`                      | Wrapped native token the `SimplePaymentProcessor` pays platform fees in. |
+|    `escrowHoldPeriod`    |                     `uint32`                       | Seconds a `SimplePaymentProcessor` escrow holds a payment before release. Fixed on the processor at deployment; must be non-zero. |
 | `sequencerUptimeFeed`   |                     `address`                      | Chainlink sequencer uptime feed; `address(0)` disables the check. |
 |       `forwarder`        |                     `address`                      | CRE forwarder allowed to deliver reports to `PaymentAutomation`. |
 |     `workflowOwner`      |                     `address`                      | CRE workflow owner carried in report metadata. |
 |    `multiSigSigners`    |                    `address[]`                     |                     Initial `MultiSig` signers.                       |
 |   `multiSigThreshold`   |                     `uint256`                      |                Initial `MultiSig` approval threshold.                |
 
-`minimumInvoiceValue` is no longer a field here: the fee rate, gas threshold, and minimum invoice value are all compile-time constants on the contracts now, not deploy-time parameters.
+`weth` moved into `config`: the WETH address now lives on [PaymentProcessorStorage](paymentprocessorstorage.sol.md#weth), where both processors read it, instead of being passed to `SimplePaymentProcessor`'s constructor. `minimumInvoiceValue` is not a field here either: the fee rate, gas threshold, and minimum invoice value are all compile-time constants on the contracts, not deploy-time parameters.
 
 #### CoreInitCodes
 

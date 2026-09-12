@@ -16,6 +16,14 @@ Shared storage contract whose owner controls oracle configuration writes.
 PaymentProcessorStorage public immutable PP_STORAGE
 ```
 
+#### SEQUENCER_UPTIME_FEED
+
+Chainlink sequencer uptime feed consulted before any price is trusted. Fixed at construction; there is no setter, so switching it (for example moving off L1, or enabling the check) means redeploying this contract. `address(0)` disables the check.
+
+```solidity
+address public immutable SEQUENCER_UPTIME_FEED
+```
+
 #### DEFAULT_DECIMAL
 
 Default number of decimals used for internal fixed-point arithmetic (e.g., 1e18 = 1.0).
@@ -131,20 +139,6 @@ function setPriceFeed(address _token, PriceFeedConfig memory _config) external;
 | :-------: | :---------------: | :------------------------------------------------------------------------------------: |
 | `_token`  |     `address`     |            The payment token address, or `address(0)` for native currency.             |
 | `_config` | `PriceFeedConfig` | The price feed configuration containing the aggregator address and heartbeat interval. |
-
-#### getSequencerUptimeFeed
-
-Returns the configured sequencer uptime feed address. Fixed at construction as an immutable; there is no setter, so switching it (e.g. moving off L1 or enabling the check) requires redeploying this contract.
-
-```solidity
-function getSequencerUptimeFeed() external view returns (address feed);
-```
-
-**Returns**
-
-|  Name  |   Type    |                                 Description                                  |
-| :----: | :-------: | :--------------------------------------------------------------------------: |
-| `feed` | `address` | The sequencer uptime feed address, or `address(0)` if the check is disabled. |
 
 ### Structs
 

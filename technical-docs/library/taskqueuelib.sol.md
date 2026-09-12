@@ -233,10 +233,12 @@ function _swap(Heap storage _heap, mapping(uint216 => uint256) storage _index, u
 
 #### getItems
 
-Returns the task IDs currently in the heap in raw order (not sorted).
+Returns the task IDs currently in the heap in raw order (not sorted), along with each task's due time.
+
+Both arrays are decoded from the heap's packed entries and are index-aligned: `time[i]` is the due timestamp of `items[i]`. Items come back in heap order, so sort by due time off-chain if you need them ordered.
 
 ```solidity
-function getItems(Heap storage _heap) internal view returns (uint216[] memory items);
+function getItems(Heap storage _heap) internal view returns (uint216[] memory items, uint40[] memory time);
 ```
 
 **Parameters**
@@ -247,9 +249,10 @@ function getItems(Heap storage _heap) internal view returns (uint216[] memory it
 
 **Returns**
 
-|   Name  |     Type    |     Description    |
-| :-----: | :---------: | :----------------: |
-| `items` | `uint216[]` | Array of task IDs. |
+|   Name  |     Type    |                      Description                      |
+| :-----: | :---------: | :---------------------------------------------------: |
+| `items` | `uint216[]` |                  Array of task IDs.                   |
+| `time`  |  `uint40[]` | Each task's due timestamp, index-aligned with `items`. |
 
 ### Errors
 

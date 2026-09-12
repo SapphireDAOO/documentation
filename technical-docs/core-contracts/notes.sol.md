@@ -216,20 +216,6 @@ function getPublicKey(address _account) external view returns (PublicKey memory 
 | :----------: | :---------: | :-------------------------------------------------------------------------------------------: |
 | `publicKey` | `PublicKey` | The registered key and the note version it was registered under. The `key` is empty when the account has not registered one. |
 
-#### getCurrentVersion
-
-Returns the active note encryption version. Always returns `CURRENT_VERSION`; there is no setter.
-
-```solidity
-function getCurrentVersion() external view returns (uint8 v);
-```
-
-**Returns**
-
-| Name |  Type   |        Description        |
-| :--: | :-----: | :-----------------------: |
-| `v`  | `uint8` | The current note version. |
-
 ### Structs
 
 #### Note
