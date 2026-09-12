@@ -111,38 +111,46 @@ Maximum number of automated withdrawal retry attempts before the escrowed funds 
 uint8 constant MAX_WITHDRAWAL_RETRIES = 3;
 ```
 
-#### ppStorage
+#### MINIMUM_INVOICE_VALUE
+
+Smallest invoice a seller may create, in wei. Fixed at compile time; there is no setter.
+
+```solidity
+uint256 constant MINIMUM_INVOICE_VALUE = 0.005 ether;
+```
+
+#### PP_STORAGE
 
 Reference to the external Payment Processor storage contract.
 
 ```solidity
-IPaymentProcessorStorage public immutable ppStorage
+IPaymentProcessorStorage public immutable PP_STORAGE
 ```
 
-#### weth
+#### WETH
 
 Wrapped native token the platform fee is paid in. See [release](#release).
 
 ```solidity
-IWETH public immutable weth
+IWETH public immutable WETH
 ```
 
 ### Functions
 
 #### constructor
 
-Initializes the payment processor with its storage, notes, and WETH contract references.
+Initializes the payment processor with the contracts it is permanently paired with.
 
-Sets `ppStorage`, `notes`, and `weth`, initializes `decisionWindow` to `SELLER_DEFAULT_DECISION_WINDOW`, and assigns `minimumInvoiceValue` directly. Fee rate and fee receiver live in `ppStorage`, not here.
+Sets `PP_STORAGE`, `notes`, `WETH`, and `automation`. Every dependency here is immutable; changing one means redeploying the processor. The minimum invoice value and decision window are no longer constructor parameters: they are the fixed constants `MINIMUM_INVOICE_VALUE` and `SELLER_DEFAULT_DECISION_WINDOW`. Fee rate and fee receiver live in `PP_STORAGE`, not here.
 
-The minimum invoice value is assigned directly rather than via `setMinimumInvoiceValue`: this contract is deployed (via `MasterDeployer`) against a predicted storage address before `PaymentProcessorStorage` actually exists, so the setter's `onlyAuthorized` check, which calls into `ppStorage`, would revert at construction time.
+The `automation` address is not optional and cannot be attached later: it must be supplied at construction, predicted via `MasterDeployer`'s CREATE2 scheme before [PaymentAutomation.sol](paymentautomation.sol.md) itself is deployed, since the two contracts hold each other's address as immutables (see [MasterDeployer.sol](masterdeployer.sol.md#deploycore)).
 
 ```solidity
 constructor(
     address _paymentProcessorStorageAddress,
-    uint256 _minimumInvoicePrice,
     address _notesAddress,
-    address _wethAddress
+    address _wethAddress,
+    address _automationAddress
 );
 ```
 
@@ -151,9 +159,9 @@ constructor(
 |               Name                |   Type    |                          Description                          |
 | :-------------------------------: | :-------: | :-----------------------------------------------------------: |
 | `_paymentProcessorStorageAddress` | `address` | The address of the shared payment processor storage contract. |
-|      `_minimumInvoicePrice`       | `uint256` |    The new minimum default invoice value to set (in wei).     |
 |          `_notesAddress`          | `address` |     Address of the notes contract used for invoice notes.     |
 |          `_wethAddress`           | `address` |     Address of the wrapped native token the platform fee is paid in.     |
+|        `_automationAddress`       | `address` |     The keeper adapter allowed to drive `processDueTasks`.     |
 
 #### receive
 
@@ -273,7 +281,7 @@ function cancelInvoice(uint216 _invoiceId) external;
 
 Releases the funds held in escrow for a specific invoice to the seller.
 
-Only callable by the seller. Invoice must be in `ACCEPTED` state (reverts `InvalidInvoiceState` otherwise) and `releaseAt` must have passed (reverts `HoldPeriodHasNotBeenExceeded` otherwise). Deducts the platform fee before transferring the net amount to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global rate, so a later change to the global rate never affects an already-created invoice. The seller is paid in native currency; the fee is pulled from escrow as native currency, wrapped into `weth`, and sent to the fee receiver as WETH, so a receiver that rejects native transfers is still paid. The fee receiver is the one authorized at acceptance (`feeReceiver`), falling back to [`PaymentProcessorStorage`'s global fee receiver](paymentprocessorstorage.sol.md#getfeereceiver) for invoices accepted before this feature existed.
+Only callable by the seller. Invoice must be in `ACCEPTED` state (reverts `InvalidInvoiceState` otherwise) and `releaseAt` must have passed (reverts `HoldPeriodHasNotBeenExceeded` otherwise). Deducts the platform fee before transferring the net amount to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global rate, so a later change to the global rate never affects an already-created invoice. The seller is paid in native currency; the fee is pulled from escrow as native currency, wrapped into `WETH`, and sent to the fee receiver as WETH, so a receiver that rejects native transfers is still paid. The fee receiver is the one authorized at acceptance (`feeReceiver`), falling back to [`PaymentProcessorStorage`'s global fee receiver](paymentprocessorstorage.sol.md#getfeereceiver) for invoices accepted before this feature existed.
 
 ```solidity
 function release(uint216 _invoiceId) public whenNotPaused;
@@ -319,7 +327,7 @@ function hasDueTasks() external view returns (bool dueTasksExist);
 
 Processes due invoice tasks (auto-release and auto-refund) within the gas threshold. Callable by the owner as a manual fallback, or by the registered automation adapter. Processing stops once remaining gas drops below the configured gas threshold, so leftover tasks are picked up on the next call.
 
-Only callable by the owner or by `automation` (reverts with `NotAuthorized` otherwise). Guarded by `nonReentrant`. The CRE/Gelato-specific entrypoints and forwarder/workflow-owner configuration that used to live here have moved to [PaymentAutomation.sol](paymentautomation.sol.md); this contract now only exposes the bare `hasDueTasks`/`processDueTasks` pair and trusts nothing but the `automation` address.
+Only callable by the owner or by `automation` (reverts with `NotAuthorized` otherwise). Guarded by `nonReentrant`. The CRE/Gelato-specific entrypoints and forwarder/workflow-owner configuration that used to live here have moved to [PaymentAutomation.sol](paymentautomation.sol.md); this contract now only exposes the bare `hasDueTasks`/`processDueTasks` pair and trusts nothing but the `automation` address, which is fixed at deployment.
 
 ```solidity
 function processDueTasks() external nonReentrant whenNotPaused;
@@ -347,57 +355,9 @@ function calculateFee(uint256 _amount) public view returns (uint256 feeValue);
 | :--------: | :-------: | :------------------------: |
 | `feeValue` | `uint256` | The calculated fee amount. |
 
-#### setMinimumInvoiceValue
-
-Updates the minimum allowed invoice value required for creating an invoice.
-
-Only callable by the owner or the storage contract.
-
-```solidity
-function setMinimumInvoiceValue(uint256 _newMinimumInvoiceValue) public onlyAuthorized;
-```
-
-**Parameters**
-
-|           Name            |   Type    |                  Description                   |
-| :-----------------------: | :-------: | :--------------------------------------------: |
-| `_newMinimumInvoiceValue` | `uint256` | The new minimum invoice value to set (in wei). |
-
-#### setAutomation
-
-Updates the automation adapter allowed to drain due tasks on a keeper network's behalf.
-
-Only callable by the owner or the storage contract. The adapter (see [PaymentAutomation.sol](paymentautomation.sol.md)) holds the Chainlink CRE and Gelato entrypoints; this processor trusts nothing but its address. Setting it to the zero address leaves the owner as the only caller of `processDueTasks`.
-
-```solidity
-function setAutomation(address _automationAddress) external onlyAuthorized;
-```
-
-**Parameters**
-
-|         Name         |   Type    |                Description                 |
-| :------------------: | :-------: | :----------------------------------------: |
-| `_automationAddress` | `address` | The new automation adapter address to set. |
-
-#### setDecisionWindow
-
-Updates the decision window sellers have to accept payments after buyer payment.
-
-Only callable by the owner or the storage contract. Reverts with `InvalidDecisionWindow` if `_newDecisionWindow` is zero.
-
-```solidity
-function setDecisionWindow(uint256 _newDecisionWindow) external onlyAuthorized;
-```
-
-**Parameters**
-
-|         Name         |   Type    |             Description             |
-| :------------------: | :-------: | :---------------------------------: |
-| `_newDecisionWindow` | `uint256` | The new decision window in seconds. |
-
 #### getAutomation
 
-Returns the address of the registered automation adapter.
+Returns the address of the registered automation adapter. Fixed at construction as an immutable; there is no setter.
 
 ```solidity
 function getAutomation() external view returns (address automationAddress);
@@ -411,7 +371,7 @@ function getAutomation() external view returns (address automationAddress);
 
 #### getDecisionWindow
 
-Returns the window sellers have to accept or reject a payment after the buyer pays.
+Returns the window sellers have to accept or reject a payment after the buyer pays. Always returns `SELLER_DEFAULT_DECISION_WINDOW`; there is no setter.
 
 ```solidity
 function getDecisionWindow() external view returns (uint256 decisionWindowValue);
@@ -459,7 +419,7 @@ function getInvoiceData(uint216 _invoiceId) public view returns (Invoice memory 
 
 #### getMinimumInvoiceValue
 
-Returns the minimum allowed invoice value required for invoice creation.
+Returns the minimum allowed invoice value required for invoice creation. Always returns `MINIMUM_INVOICE_VALUE`; there is no setter.
 
 ```solidity
 function getMinimumInvoiceValue() external view returns (uint256 minimumValue);
@@ -646,18 +606,6 @@ event WithdrawalRetried(uint216 indexed invoiceId, address indexed recipient, ui
 |  `amount`   | `uint256` |         The amount that failed to transfer.         |
 |  `attempt`  |  `uint8`  |              The retry attempt number.              |
 
-#### AutomationUpdated
-
-Emitted when the automation adapter authorized to call `processDueTasks` is updated.
-
-```solidity
-event AutomationUpdated(address indexed automation);
-```
-
-|     Name     |   Type    |             Description             |
-| :----------: | :-------: | :---------------------------------: |
-| `automation` | `address` | The new automation adapter address. |
-
 #### TransferFailed
 
 Emitted when a transfer from the escrow fails. Best-effort for fee transfers, which stay in escrow. On the final refund attempt it precedes `PaymentBurned`.
@@ -692,7 +640,7 @@ event PaymentBurned(uint216 indexed invoiceId, uint256 amount);
 |                     `NotAuthorized()`                      |                        Thrown when the caller lacks the required role or permission.                        |
 |                     `ValueIsTooLow()`                      |                     Thrown when the provided value is lower than the required minimum.                      |
 |                  `InvalidHeapPosition()`                   |                                 Thrown when a task's heap index is invalid.                                 |
-|                 `InvalidDecisionWindow()`                  |                   Thrown when the decision window value provided is invalid (e.g., zero).                   |
+|                 `InvalidDecisionWindow()`                  |          Declared but never thrown; the decision window is a fixed constant now, so there is nothing left to validate.          |
 | `IncorrectPaymentAmount(uint256 _sent, uint256 _expected)` |               Thrown when the payment amount sent does not match the expected invoice price.                |
 |                  `InvoiceAlreadyExists()`                  |                        Thrown when trying to create an invoice that already exists.                         |
 |        `InvalidInvoiceState(uint256 _invoiceState)`        |                  Thrown when the invoice is in an invalid state for the requested action.                   |

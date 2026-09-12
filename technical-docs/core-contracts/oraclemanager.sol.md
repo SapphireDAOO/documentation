@@ -8,12 +8,12 @@ You can find the full code implementation [here](https://github.com/SapphireDAOO
 
 ### State Variables
 
-#### ppStorage
+#### PP_STORAGE
 
 Shared storage contract whose owner controls oracle configuration writes.
 
 ```solidity
-PaymentProcessorStorage public immutable ppStorage
+PaymentProcessorStorage public immutable PP_STORAGE
 ```
 
 #### DEFAULT_DECIMAL
@@ -119,7 +119,7 @@ function isSupportedToken(address _token) external view returns (bool supported)
 
 Sets the Chainlink price feed configuration for a specific payment token.
 
-Only callable by the owner of `ppStorage`. Support is controlled entirely by `_config.allowed`: a token can be turned off without clearing its aggregator, and re-enabled without resupplying it.
+Only callable by the owner of `PP_STORAGE`. Support is controlled entirely by `_config.allowed`: a token can be turned off without clearing its aggregator, and re-enabled without resupplying it.
 
 ```solidity
 function setPriceFeed(address _token, PriceFeedConfig memory _config) external;
@@ -132,25 +132,9 @@ function setPriceFeed(address _token, PriceFeedConfig memory _config) external;
 | `_token`  |     `address`     |            The payment token address, or `address(0)` for native currency.             |
 | `_config` | `PriceFeedConfig` | The price feed configuration containing the aggregator address and heartbeat interval. |
 
-#### setSequencerUptimeFeed
-
-Sets the Chainlink L2 sequencer uptime feed address.
-
-Only callable by the owner of `ppStorage`. Set to `address(0)` to disable the sequencer check (e.g. on L1 deployments or local testnets).
-
-```solidity
-function setSequencerUptimeFeed(address _sequencerUptimeFeed) external;
-```
-
-**Parameters**
-
-|          Name          |   Type    |                               Description                                |
-| :--------------------: | :-------: | :----------------------------------------------------------------------: |
-| `_sequencerUptimeFeed` | `address` | The sequencer uptime feed address, or `address(0)` to disable the check. |
-
 #### getSequencerUptimeFeed
 
-Returns the configured sequencer uptime feed address.
+Returns the configured sequencer uptime feed address. Fixed at construction as an immutable; there is no setter, so switching it (e.g. moving off L1 or enabling the check) requires redeploying this contract.
 
 ```solidity
 function getSequencerUptimeFeed() external view returns (address feed);

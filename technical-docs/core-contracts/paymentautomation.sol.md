@@ -5,54 +5,55 @@ Keeper adapter that triggers automated release and refund of due invoices on [Si
 - **Chainlink CRE**: `onReport`, called by the Keystone forwarder with a DON-signed report. The forwarder confirms this contract advertises `IReceiver` over ERC-165 before delivering.
 - **Gelato Web3 Functions**: `checker`, polled offchain, which names `processDueTasks` as the exec target.
 
-Only one keeper network is meant to be active at a time; the second is redundancy, to be switched on if the primary stalls or is decommissioned. Both paths converge on the same processor call, so running both at once is still safe: whichever fires first drains the queue and the other finds nothing due. `SimplePaymentProcessor` must be pointed back at this contract via `setAutomation` for either path to work.
+Only one keeper network is meant to be active at a time; the second is redundancy, to be switched on if the primary stalls or is decommissioned. Both paths converge on the same processor call, so running both at once is still safe: whichever fires first drains the queue and the other finds nothing due. `SimplePaymentProcessor` holds this adapter's address as an immutable set at deployment, so the pairing is fixed; changing it means redeploying both contracts (see [MasterDeployer.sol](masterdeployer.sol.md#deploycore)).
 
 You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/PaymentAutomation.sol)
 
 ### State Variables
 
-#### processor
+#### PROCESSOR
 
 The payment processor whose due-task queue this contract drives.
 
 ```solidity
-ISimplePaymentProcessor public immutable processor
+ISimplePaymentProcessor public immutable PROCESSOR
 ```
 
-#### ppStorage
+#### PP_STORAGE
 
 Reference to the external Payment Processor storage contract, used for owner checks.
 
 ```solidity
-IPaymentProcessorStorage public immutable ppStorage
+IPaymentProcessorStorage public immutable PP_STORAGE
 ```
 
-Both `processor` and `ppStorage` are immutable; redeploy and re-point `SimplePaymentProcessor.setAutomation` to change them.
+`PROCESSOR`, `PP_STORAGE`, `FORWARDER`, and `WORKFLOW_OWNER` are all immutable. There is no way to re-point any of them after deployment; changing one means redeploying this contract (and, since `PROCESSOR` is fixed on both sides, `SimplePaymentProcessor` too).
 
 ### Functions
 
 #### constructor
 
-Wires the adapter to the processor it drives and the storage contract it reads the owner from.
+Wires the adapter to the storage contract and the keeper identities it trusts.
+
+Every value here is fixed at construction. The processor is not a constructor argument: it is read back from the deployer via `IPendingProcessorProvider.pendingProcessor()`, which keeps this contract's init code free of the processor's address so its own address stays predictable via CREATE2. The deployer must therefore implement that interface (in practice, [MasterDeployer.sol](masterdeployer.sol.md), which resolves it to the already-deployed `SimplePaymentProcessor`). Reverts with `InvalidAddress` if the storage address is the zero address, or if the resolved processor address is the zero address.
 
 ```solidity
-constructor(address _processorAddress, address _paymentProcessorStorageAddress);
+constructor(address _paymentProcessorStorageAddress, address _forwarderAddress, address _workflowOwner);
 ```
 
 **Parameters**
 
 |              Name              |    Type   |                          Description                          |
 | :-------------------------------: | :-------: | :-----------------------------------------------------------: |
-|       `_processorAddress`       | `address` | The SimplePaymentProcessor address whose due tasks are processed. |
 | `_paymentProcessorStorageAddress` | `address` | The address of the shared payment processor storage contract. |
-
-Reverts with `InvalidAddress` if either argument is the zero address.
+|       `_forwarderAddress`       | `address` | The CRE forwarder allowed to deliver reports to `onReport`. |
+|         `_workflowOwner`        | `address` | The CRE workflow owner carried in report metadata. |
 
 #### onReport
 
 Handles a verified report delivered by the CRE forwarder and processes due invoice tasks. The report payload is ignored; delivery of a verified report is itself the trigger.
 
-Only callable by the configured `forwarder` (reverts with `NotAuthorized` otherwise). Also validates that the report metadata carries the configured `workflowOwner`, reverting with `UnauthorizedWorkflowOwner` if it doesn't, so a workflow deployed by a different owner can't trigger processing through a shared forwarder. On success, calls `processor.processDueTasks()` and emits `DueTasksProcessed` tagged with `CRE_SOURCE`. This function does not itself check whether the system is paused; if it is, the downstream `processor.processDueTasks()` call reverts with `ContractPaused` rather than no-op'ing (unlike `hasDueTasks`/`checker`, which report no work so a well-behaved keeper never gets this far).
+Only callable by the configured `FORWARDER` (reverts with `NotAuthorized` otherwise). Also validates that the report metadata carries the configured `WORKFLOW_OWNER`, reverting with `UnauthorizedWorkflowOwner` if it doesn't, so a workflow deployed by a different owner can't trigger processing through a shared forwarder. On success, calls `PROCESSOR.processDueTasks()` and emits `DueTasksProcessed` tagged with `CRE_SOURCE`. This function does not itself check whether the system is paused; if it is, the downstream `PROCESSOR.processDueTasks()` call reverts with `ContractPaused` rather than no-op'ing (unlike `hasDueTasks`/`checker`, which report no work so a well-behaved keeper never gets this far).
 
 ```solidity
 function onReport(bytes calldata _metadata, bytes calldata _report) external;
@@ -124,41 +125,9 @@ function supportsInterface(bytes4 _interfaceId) external pure returns (bool supp
 | :-----------: | :----: | :---------------------------------------------------------------------------------: |
 | `supported` | `bool` | True for `IReceiver` and `IERC165` interface IDs; false otherwise. |
 
-#### setForwarderAddress
-
-Updates the address of the CRE (Keystone) forwarder contract that delivers workflow reports via `onReport`.
-
-Only callable by the owner or the storage contract. Only the configured forwarder may call `onReport`.
-
-```solidity
-function setForwarderAddress(address _forwarderAddress) external onlyAuthorized;
-```
-
-**Parameters**
-
-|         Name        |    Type   |                  Description                  |
-| :-----------------: | :-------: | :-------------------------------------------: |
-| `_forwarderAddress` | `address` | The new forwarder contract address to be set. |
-
-#### setWorkflowOwner
-
-Updates the CRE workflow owner authorized to trigger `onReport`. Reports whose metadata carries a different workflow owner are rejected, so workflows deployed by other owners can't trigger task processing through the shared forwarder.
-
-Only callable by the owner or the storage contract.
-
-```solidity
-function setWorkflowOwner(address _workflowOwner) external onlyAuthorized;
-```
-
-**Parameters**
-
-|       Name       |    Type   |                     Description                    |
-| :---------------: | :-------: | :----------------------------------------------------: |
-| `_workflowOwner` | `address` | The address that owns the authorized CRE workflow. |
-
 #### getForwarder
 
-Returns the address of the configured CRE forwarder contract.
+Returns the address of the configured CRE forwarder contract. Fixed at construction as an immutable; there is no setter, so enabling or rotating the CRE keeper path requires redeploying this contract.
 
 ```solidity
 function getForwarder() external view returns (address forwarderAddress);
@@ -172,7 +141,7 @@ function getForwarder() external view returns (address forwarderAddress);
 
 #### getWorkflowOwner
 
-Returns the CRE workflow owner authorized to trigger `onReport`.
+Returns the CRE workflow owner authorized to trigger `onReport`. Fixed at construction as an immutable; there is no setter.
 
 ```solidity
 function getWorkflowOwner() external view returns (address workflowOwnerAddress);
@@ -199,34 +168,10 @@ event DueTasksProcessed(address indexed caller, bytes32 indexed source);
 | `caller` | `address` |                  The address that triggered processing.                 |
 | `source` | `bytes32` | The keeper path used: `CRE_SOURCE` for `onReport`, `GELATO_SOURCE` for `processDueTasks`. |
 
-#### ForwarderUpdated
-
-Emitted when the CRE forwarder address is updated.
-
-```solidity
-event ForwarderUpdated(address indexed forwarder);
-```
-
-|    Name     |    Type   |             Description            |
-| :-----------: | :-------: | :------------------------------------: |
-| `forwarder` | `address` | The new forwarder contract address. |
-
-#### WorkflowOwnerUpdated
-
-Emitted when the authorized CRE workflow owner is updated.
-
-```solidity
-event WorkflowOwnerUpdated(address indexed workflowOwner);
-```
-
-|      Name      |    Type   |               Description              |
-| :---------------: | :-------: | :------------------------------------------: |
-| `workflowOwner` | `address` | The new authorized workflow owner address. |
-
 ### Errors
 
 | Error | Description |
 | :----: | :----------: |
 | `NotAuthorized()` | Thrown when the caller lacks the required role or permission. |
-| `InvalidAddress()` | Thrown when the processor or storage address supplied to the constructor is the zero address. |
+| `InvalidAddress()` | Thrown when the storage address supplied to the constructor is the zero address, or the processor resolved via `pendingProcessor()` is the zero address. |
 | `UnauthorizedWorkflowOwner(address _workflowOwner)` | Thrown when a CRE report's metadata does not carry the authorized workflow owner. |

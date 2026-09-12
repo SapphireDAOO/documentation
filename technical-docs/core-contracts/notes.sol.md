@@ -1,13 +1,13 @@
 # Notes.sol
 
-The `Notes.sol` Solidity contract stores encrypted order notes and tracks per-user opened state for SapphireDao payment flows. It is designed to be called by authorized payment processors (for example, `SimplePaymentProcessor.sol` and `IntermediatedPaymentProcessor.sol`) and uses the `PaymentProcessorStorage.sol` owner to manage authorization.
+The `Notes.sol` Solidity contract stores encrypted order notes and tracks per-user opened state for SapphireDao payment flows. It is designed to be called by authorized payment processors (for example, `SimplePaymentProcessor.sol` and `IntermediatedPaymentProcessor.sol`). The allowlist of who may write notes is fixed once, at construction; there is no setter to change it afterwards.
 
 Notes.sol enables:
 
 - Encrypted, append-only notes per order
 - Optional sharing for non-authors
 - Per-user opened state tracking
-- Allowlist-based write access controlled by the storage owner
+- Allowlist-based write access, fixed at deployment
 - Write-once public key registration, so others know which key to encrypt notes to
 
 Contract Address: [0xE818dA06Ceed4Ac6c6d4871a5Fc0226B8032834e](https://sepolia.basescan.org/address/0xE818dA06Ceed4Ac6c6d4871a5Fc0226B8032834e)
@@ -32,19 +32,29 @@ Authorization flag indicating access is granted.
 uint256 public constant ALLOWED = 1
 ```
 
-#### ppStorage
+#### PP_STORAGE
 
 Reference to the external Payment Processor storage contract.
 
 ```solidity
-IPaymentProcessorStorage public immutable ppStorage
+IPaymentProcessorStorage public immutable PP_STORAGE
+```
+
+#### CURRENT_VERSION
+
+Active note encryption version used for newly created notes. Fixed at compile time; there is no setter.
+
+```solidity
+uint8 private constant CURRENT_VERSION = 1
 ```
 
 ### Functions
 
 #### constructor
 
-Initializes the Notes contract with a payment processor storage reference.
+Initializes the Notes contract with a payment processor storage reference, and fixes the write allowlist for good.
+
+Fetches the addresses to authorize from its deployer: `msg.sender` must implement [`IAuthorizedAddressProvider`](masterdeployer.sol.md#related-interface-iauthorizedaddressprovider) (in practice, [MasterDeployer.sol](masterdeployer.sol.md)), and this contract calls `authorizedAddresses()` on it once, at construction. Unlike [PaymentProcessorStorage.sol](paymentprocessorstorage.sol.md#constructor), this does not emit a per-address event; the allowlist is simply populated silently. There is no setter, so the set of addresses allowed to write notes can never change after deployment.
 
 ```solidity
 constructor(address _paymentProcessorStorageAddress) ;
@@ -170,22 +180,6 @@ function getNote(uint216 _invoiceId, uint256 _noteId)
 | `openedStatus` |  `bool`   | Whether the caller has opened the note. |
 |   `version`    |  `uint8`  |          Note schema version.           |
 
-#### updateVersion
-
-Updates the active note encryption version.
-
-Only callable by the owner of `ppStorage`; this checks the storage owner directly, bypassing the `_authorized` allowlist used by `createNote`/`setOpened`. This affects only notes created after the update. Existing notes retain their original version and remain decryptable using the encrypter associated with their stored version.
-
-```solidity
-function updateVersion(uint8 _newVersion) external;
-```
-
-**Parameters**
-
-|     Name      |  Type   |                    Description                     |
-| :-----------: | :-----: | :------------------------------------------------: |
-| `_newVersion` | `uint8` | The new note encryption version identifier to use. |
-
 #### setPublicKey
 
 Registers the caller's wallet public key, so others can encrypt notes to it.
@@ -222,26 +216,9 @@ function getPublicKey(address _account) external view returns (PublicKey memory 
 | :----------: | :---------: | :-------------------------------------------------------------------------------------------: |
 | `publicKey` | `PublicKey` | The registered key and the note version it was registered under. The `key` is empty when the account has not registered one. |
 
-#### setAuthorized
-
-Updates the authorization status for a user.
-
-Only callable by the owner of `ppStorage`; this checks the storage owner directly, bypassing the `_authorized` allowlist itself (it's what maintains that allowlist).
-
-```solidity
-function setAuthorized(address _user, bool _enabled) external;
-```
-
-**Parameters**
-
-|    Name    |   Type    |              Description               |
-| :--------: | :-------: | :------------------------------------: |
-|  `_user`   | `address` |         The address to update.         |
-| `_enabled` |  `bool`   | Whether the user should be authorized. |
-
 #### getCurrentVersion
 
-Returns the active note encryption version.
+Returns the active note encryption version. Always returns `CURRENT_VERSION`; there is no setter.
 
 ```solidity
 function getCurrentVersion() external view returns (uint8 v);

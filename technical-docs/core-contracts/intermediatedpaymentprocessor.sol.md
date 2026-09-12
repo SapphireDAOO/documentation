@@ -15,20 +15,20 @@ You can find the full code implementation [here](https://github.com/SapphireDAOO
 
 ### State Variables
 
-#### ppStorage
+#### PP_STORAGE
 
 Reference to the external Payment Processor storage contract.
 
 ```solidity
-IPaymentProcessorStorage public immutable ppStorage
+IPaymentProcessorStorage public immutable PP_STORAGE
 ```
 
-#### oracle
+#### ORACLE
 
-OracleManager used to convert USD-denominated invoice prices into payment-token amounts. Not immutable; updatable via `setOracle`.
+OracleManager used to convert USD-denominated invoice prices into payment-token amounts. Fixed at construction as an immutable; there is no setter, so replacing it means redeploying this contract.
 
 ```solidity
-IOracleManager public oracle
+IOracleManager public immutable ORACLE
 ```
 
 The invoice status codes and fee/decimal constants below are plain file-level constants imported from `constants/Intermediated.sol`, not `public` members of the contract itself; there is no on-chain getter like `IntermediatedPaymentProcessor.CREATED()`.
@@ -133,7 +133,7 @@ uint256 constant DEFAULT_MINIMUM_INVOICE_PRICE = 1e8;
 
 #### constructor
 
-Initializes the IntermediatedPaymentProcessor contract with core configuration.
+Initializes the IntermediatedPaymentProcessor contract with core configuration. `ORACLE` is fixed here as an immutable; there is no setter.
 
 ```solidity
 constructor(address _paymentProcessorStorageAddress, address _oracle) ;
@@ -389,39 +389,9 @@ function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external
 |  `_invoiceId` | `uint216` |                   The ID of the invoice to update.                   |
 | `_holdPeriod` | `uint256` | Additional hold period (in seconds) to add to the current timestamp. |
 
-#### setOracle
-
-Updates the OracleManager contract used for token price conversions.
-
-Only callable by the owner. Reverts with `InvalidOracle` if `_oracle` is the zero address.
-
-```solidity
-function setOracle(address _oracle) external onlyOwner;
-```
-
-**Parameters**
-
-|   Name    |   Type    |                       Description                      |
-| :--------: | :-------: | :--------------------------------------------------------: |
-| `_oracle` | `address` | The address of the new OracleManager contract. |
-
-#### setMinimumPrice
-
-Sets the minimum USD price an invoice must have to be created.
-
-```solidity
-function setMinimumPrice(uint256 _newMinimumPrice) external onlyOwner;
-```
-
-**Parameters**
-
-|         Name         |    Type   |                                      Description                                     |
-| :------------------: | :-------: | :----------------------------------------------------------------------------------: |
-| `_newMinimumPrice`   | `uint256` | The new minimum price threshold (8 decimals, same unit as invoice prices). |
-
 #### getMinimumPrice
 
-Returns the minimum USD price an invoice must meet to be created.
+Returns the minimum USD price an invoice must meet to be created. Always returns `DEFAULT_MINIMUM_INVOICE_PRICE`; there is no setter.
 
 ```solidity
 function getMinimumPrice() external view returns (uint256 minimumPrice);
@@ -877,19 +847,6 @@ event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint2
 | `recipient` | `address` | The intended recipient of the failed transfer. |
 | `amount`    | `uint256` | The amount that could not be transferred. |
 
-#### OracleUpdated
-
-Emitted when the OracleManager contract is updated via `setOracle`.
-
-```solidity
-event OracleUpdated(address indexed previousOracle, address indexed newOracle);
-```
-
-| Name        | Type      | Description                                  |
-| :----------: | :-------: | :-------------------------------------------: |
-| `previousOracle` | `address` | The previously configured OracleManager address. |
-| `newOracle`      | `address` | The newly configured OracleManager address. |
-
 ### Errors
 
 | Error | Description |
@@ -923,4 +880,4 @@ event OracleUpdated(address indexed previousOracle, address indexed newOracle);
 | `InvalidSellersPayoutShare()` | Thrown when the seller's payout share exceeds the allowed limit (10000 BPS). |
 | `InvalidSeller()` | Thrown when an invoice is created with the zero address as the seller. |
 | `EscrowWithdrawFailed()` | Thrown when the escrow contract fails to execute a withdrawal. |
-| `InvalidOracle()` | Thrown when attempting to set the oracle address to the zero address. |
+| `InvalidOracle()` | Declared but never thrown; `ORACLE` is fixed at construction now, with no setter left to validate against. |

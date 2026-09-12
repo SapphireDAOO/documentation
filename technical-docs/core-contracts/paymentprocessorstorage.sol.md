@@ -40,13 +40,29 @@ How long an emergency pause holds without owner approval before it lapses automa
 uint256 public constant EMERGENCY_PAUSE_DURATION = 24 hours
 ```
 
+#### FEE_RATE
+
+Platform fee rate in basis points (BPS). Fixed at compile time; there is no setter.
+
+```solidity
+uint96 public constant FEE_RATE = 500
+```
+
+#### GAS_THRESHOLD
+
+Minimum gas that must remain to continue processing automated tasks. Fixed at compile time; there is no setter.
+
+```solidity
+uint96 public constant GAS_THRESHOLD = 100_000
+```
+
 ### Functions
 
 #### constructor
 
 Initializes the contract with the given configuration.
 
-Sets the contract owner, stores the initial configuration parameters, and initializes the invoice nonce counter. Also fetches the addresses to authorize from its deployer: `msg.sender` must implement [`IAuthorizedAddressProvider`](masterdeployer.sol.md#related-interface-iauthorizedaddressprovider) (in practice, [MasterDeployer.sol](masterdeployer.sol.md)), and this contract calls `authorizedAddresses()` on it once, at construction, emitting `AuthorizationUpdated` for each address returned. Keeping this list out of the constructor arguments keeps it out of the CREATE2 init code, so this contract's address is predictable before the authorized processors are deployed. Authorization is fixed here, at deployment, and cannot be changed afterwards; there is no setter.
+Sets the contract owner, records `feeReceiver` and `intermediatedPlatformsOperator`, and initializes the invoice nonce counter. Also fetches the addresses to authorize from its deployer: `msg.sender` must implement [`IAuthorizedAddressProvider`](masterdeployer.sol.md#related-interface-iauthorizedaddressprovider) (in practice, [MasterDeployer.sol](masterdeployer.sol.md)), and this contract calls `authorizedAddresses()` on it once, at construction, emitting `AuthorizationUpdated` for each address returned. Keeping this list out of the constructor arguments keeps it out of the CREATE2 init code, so this contract's address is predictable before the authorized processors are deployed. Authorization is fixed here, at deployment, and cannot be changed afterwards; there is no setter. `feeReceiver` is likewise fixed at construction as an immutable; only `intermediatedPlatformsOperator` and `feeSigner` remain settable after deployment (via [setIntermediatedPlatformsOperator](#setintermediatedplatformsoperator) and [setFeeSigner](#setfeesigner)).
 
 ```solidity
 constructor(Configuration memory _configuration) ;
@@ -56,7 +72,7 @@ constructor(Configuration memory _configuration) ;
 
 |       Name       |      Type       |                                      Description                                      |
 | :--------------: | :-------------: | :-----------------------------------------------------------------------------------: |
-| `_configuration` | `Configuration` | The initial configuration parameters including owner, fee settings, and gas threshold. |
+| `_configuration` | `Configuration` | The initial configuration: owner, fee receiver, and intermediated platforms operator. |
 
 #### updateInvoiceNonce
 
@@ -79,70 +95,6 @@ function updateInvoiceNonce(uint216 _by) external onlyAuthorized returns (uint21
 |      Name       |   Type    |                  Description                  |
 | :-------------: | :-------: | :-------------------------------------------: |
 | `totalInvoices` | `uint216` | The updated total number of invoices created. |
-
-#### setFeeReceiver
-
-Sets the address that will receive fees collected from transactions.
-
-Callable only by the contract owner.
-
-```solidity
-function setFeeReceiver(address _feeReceiverAddress) external onlyOwner;
-```
-
-**Parameters**
-
-|         Name          |   Type    |              Description              |
-| :-------------------: | :-------: | :-----------------------------------: |
-| `_feeReceiverAddress` | `address` | The address to receive protocol fees. |
-
-#### setFeeRate
-
-Updates the fee rate for seller payouts.
-
-Callable only by the contract owner. Reverts with `InvalidFeeRate` if the rate exceeds `BASIS_POINTS` (10,000 = 100%).
-
-```solidity
-function setFeeRate(uint96 _newFeeRate) external onlyOwner;
-```
-
-**Parameters**
-
-|     Name      |   Type   |                        Description                        |
-| :-----------: | :------: | :-------------------------------------------------------: |
-| `_newFeeRate` | `uint96` | The new fee rate in basis points (1% = 100 basis points). |
-
-#### setGasThreshold
-
-Updates the gas threshold used in automated task processing.
-
-Only callable by the contract owner. This threshold determines the minimum gas required to continue processing during `SimplePaymentProcessor.processDueTasks`, called either directly or via the `PaymentAutomation` adapter's `onReport` (Chainlink CRE) / `processDueTasks` (Gelato) entrypoints.
-
-```solidity
-function setGasThreshold(uint96 _newGasThreshold) external onlyOwner;
-```
-
-**Parameters**
-
-|        Name        |   Type   |                  Description                   |
-| :----------------: | :------: | :--------------------------------------------: |
-| `_newGasThreshold` | `uint96` | The new gas threshold value (in units of gas). |
-
-#### setPaymentValidityDuration
-
-Updates the payment validity duration: how long after creation an invoice can still be paid before it expires unpaid (reverts with `InvoiceIsNoLongerValid` on a payment attempt after that window).
-
-Only callable by the contract owner. Applies to invoices created after the update; the validity window on an already-created invoice is fixed to the value in effect at creation.
-
-```solidity
-function setPaymentValidityDuration(uint256 _newValidityDuration) external onlyOwner;
-```
-
-**Parameters**
-
-|          Name          |   Type    |                                                   Description                                                   |
-| :--------------------: | :-------: | :-------------------------------------------------------------------------------------------------------------: |
-| `_newValidityDuration` | `uint256` | The new payment window in seconds: how long an unpaid invoice remains payable after creation before it expires. |
 
 #### setFeeSigner
 
@@ -278,7 +230,7 @@ function getEmergencyPauseExpiry() external view returns (uint256 expiry);
 
 #### getPaymentValidityDuration
 
-Returns the current payment window: how long a newly created invoice stays payable before it expires unpaid.
+Returns the payment window: how long a newly created invoice stays payable before it expires unpaid. Always returns `DEFAULT_PAYMENT_VALIDITY_PERIOD` (7 days); there is no setter.
 
 ```solidity
 function getPaymentValidityDuration() external view returns (uint256 validDuration);
@@ -320,7 +272,7 @@ function totalInvoiceCreated() public view returns (uint216 totalInvoices);
 
 #### getFeeRate
 
-Returns the current platform fee rate in basis points.
+Returns the platform fee rate in basis points. Always returns `FEE_RATE`; there is no setter.
 
 ```solidity
 function getFeeRate() external view returns (uint256 feeRate);
@@ -334,7 +286,7 @@ function getFeeRate() external view returns (uint256 feeRate);
 
 #### getFeeReceiver
 
-Returns the address that receives collected platform fees.
+Returns the address that receives collected platform fees. Fixed at construction as an immutable; there is no setter.
 
 ```solidity
 function getFeeReceiver() external view returns (address feeReceiver);
@@ -376,7 +328,7 @@ function getIntermediatedPlatformsOperator() external view returns (address inte
 
 #### getGasThreshold
 
-Returns the current gas threshold used to limit the execution loop in automated task processing.
+Returns the gas threshold used to limit the execution loop in automated task processing. Always returns `GAS_THRESHOLD`; there is no setter.
 
 This threshold is typically used to prevent out-of-gas errors during batch operations triggered by the Chainlink CRE workflow.
 
@@ -394,25 +346,21 @@ function getGasThreshold() external view returns (uint256 gasThreshold);
 
 #### Configuration
 
-Holds core configuration parameters for the contract.
+Holds the addresses the contract is permanently configured with. Every field becomes an immutable or fixed at construction; the fee rate and gas threshold are no longer part of this struct since they are now compile-time constants (`FEE_RATE`, `GAS_THRESHOLD`) on the contract itself.
 
 ```solidity
 struct Configuration {
     address owner;
-    uint96 feeRate;
     address feeReceiver;
     address intermediatedPlatformsOperator;
-    uint96 gasThreshold;
 }
 ```
 
 |        Field        |   Type    |                                       Description                                       |
 | :-----------------: | :-------: | :-------------------------------------------------------------------------------------: |
-|       `owner`       | `address` |               The address authorized to modify configuration parameters.                |
-|      `feeRate`      | `uint96`  |        Platform fee rate in basis points (BPS). 100 BPS = 1%; 10,000 BPS = 100%.        |
+|       `owner`       | `address` |               The address authorized to pause and to set the emergency pauser.                |
 |    `feeReceiver`    | `address` |                          Address that receives platform fees.                           |
 | `intermediatedPlatformsOperator` | `address` | Address authorized to interact with invoice creation and specific management functions. |
-|   `gasThreshold`    | `uint96`  |        The minimum amount of gas that must remain to continue processing tasks.         |
 
 ### Events
 
@@ -441,18 +389,6 @@ event AuthorizationUpdated(address indexed account, bool authorized);
 |  `account`   | `address` | The address whose authorization status changed. |
 | `authorized` |  `bool`   |          The new authorization status.          |
 
-#### FeeReceiverUpdated
-
-Emitted when the fee receiver address is updated.
-
-```solidity
-event FeeReceiverUpdated(address indexed feeReceiver);
-```
-
-|     Name      |   Type    |          Description          |
-| :-----------: | :-------: | :---------------------------: |
-| `feeReceiver` | `address` | The new fee receiver address. |
-
 #### FeeSignerUpdated
 
 Emitted when the fee signer is updated.
@@ -476,42 +412,6 @@ event IntermediatedPlatformsOperatorUpdated(address indexed intermediatedPlatfor
 |              Name                |   Type    |                   Description                    |
 | :-------------------------------: | :-------: | :-----------------------------------------------: |
 | `intermediatedPlatformsOperator` | `address` | The new Intermediated Platforms Operator address. |
-
-#### FeeRateUpdated
-
-Emitted when the platform fee rate is updated.
-
-```solidity
-event FeeRateUpdated(uint96 feeRate);
-```
-
-|   Name    |   Type   |            Description            |
-| :-------: | :------: | :-------------------------------: |
-| `feeRate` | `uint96` | The new fee rate in basis points. |
-
-#### GasThresholdUpdated
-
-Emitted when the automated task-processing gas threshold is updated.
-
-```solidity
-event GasThresholdUpdated(uint96 gasThreshold);
-```
-
-|      Name      |   Type   |         Description          |
-| :------------: | :------: | :--------------------------: |
-| `gasThreshold` | `uint96` | The new gas threshold value. |
-
-#### PaymentValidityDurationUpdated
-
-Emitted when the payment validity duration is updated.
-
-```solidity
-event PaymentValidityDurationUpdated(uint256 validityDuration);
-```
-
-|        Name        |   Type    |                 Description                 |
-| :----------------: | :-------: | :-----------------------------------------: |
-| `validityDuration` | `uint256` | The new payment validity window in seconds. |
 
 #### Paused
 
@@ -580,7 +480,7 @@ event EmergencyPauserUpdated(address indexed emergencyPauser);
 | :------------------------: | :---------------------------------------------------------------------------------------------: |
 |     `NotAuthorized()`      |           Thrown when a caller attempts an action without the required authorization.           |
 |    `InvalidFeeSigner()`    |                    Thrown when setting the fee signer to the zero address.                       |
-|     `InvalidFeeRate()`     |   Thrown when the provided fee rate exceeds the maximum allowed (10,000 basis points = 100%).   |
+|     `InvalidFeeRate()`     |   Declared but never thrown; `FEE_RATE` is a fixed constant now, so there is nothing left to validate.   |
 |     `AlreadyPaused()`      | Thrown when pausing a system that is already paused, or that has an unresolved emergency pause. |
 |       `NotPaused()`        |                       Thrown when unpausing a system that is not paused.                        |
 | `NoActiveEmergencyPause()` |           Thrown when approving an emergency pause that is absent or already expired.           |
