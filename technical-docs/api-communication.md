@@ -95,7 +95,7 @@ Every endpoint requires an `X-API-KEY` header, enforced by `AccessControlMiddleW
   "orders": {
     "550e8400-e29b-41d4-a716-446655440000": {
       "seller": "0x329C3E1bEa46Abc22F307eE30Cbb522B82Fe7082",
-      "orderId": "59808737901387817475691215581034097896123425895641016234844280889"
+      "invoiceId": "59808737901387817475691215581034097896123425895641016234844280889"
     }
   }
 }
@@ -112,7 +112,7 @@ Every endpoint requires an `X-API-KEY` header, enforced by `AccessControlMiddleW
 * `price` is converted to token amounts using Chainlink price feeds via [getTokenValueFromUsd](core-contracts/intermediatedpaymentprocessor.sol.md#gettokenvaluefromusd).
 * A single invoice triggers `createSingleInvoice`, emitting `InvoiceCreated`. Multiple invoices trigger `createMetaInvoice`, emitting `MetaInvoiceCreated`.
 * Only the intermediated platform operator (retrieved via [getIntermediatedPlatformsOperator](core-contracts/paymentprocessorstorage.sol.md#getintermediatedplatformsoperator)) can call these functions.
-* The client-provided `orderId` is hashed to a `uint216` for on-chain storage, producing the numeric `orderId` in the response. That numeric id is the `{invoiceId}` used by every other endpoint.
+* The client-provided `orderId` is hashed to a `uint216` for on-chain storage, producing the numeric `invoiceId` in the response. The request keys the invoice by your `orderId` and the response hands back the on-chain id under `invoiceId`; that numeric id is the `{invoiceId}` used by every other endpoint.
 
 **Error Responses**:
 
@@ -386,9 +386,9 @@ curl -X POST https://sapphiredaotesting.com/v1/invoices/598087379013878174756912
 | Query  | Required | Description                                                                                        |
 | :----: | :------: | :--------------------------------------------------------------------------------------------------: |
 | `from` | ❌        | Must be `USD`, the only currency the oracle prices against. Defaults to `USD`. `From` also works.   |
-| `to`   | ✅        | Token symbols from the network's tokens table. Repeated, comma-separated, or bracketed.             |
+| `to`   | ✅        | A token symbol from the network's tokens table. Repeat the parameter for several.                   |
 
-`to` accepts `to=wBTC&to=ETH`, `to=ETH,wBTC`, and `to=[ETH, wBTC]`.
+Each token is its own `to` parameter: `to=wBTC&to=ETH`. A comma-separated list is not split, so `to=ETH,wBTC` is read as one unknown symbol and rejected.
 
 **Success (200)** (the rate is *from* USD, so each value is how much of that token one USD buys):
 
@@ -664,6 +664,7 @@ Contract addresses, RPC endpoints, checkout/subgraph URLs, and the signer key ar
 * **Tokens**: each network defines a `tokens` table mapping a symbol to its address and decimals. This is the one place a payment token is defined: `paymentTokens` in a create request names a symbol from this table, and callback payloads render an event's token address back to its symbol and decimals through the same table.
 * **Signer key**: `signerKey` selects which key signs transactions, per network (e.g. a local-only key on `local` versus the production signing key on the deployed networks), so a local run cannot touch a deployed network's key.
 * **Checkout/explorer/subgraph URLs**: each network configures its own `urls.checkout`, `urls.explorer` and `urls.subgraph`, which is why the same request body against `local`, `testnet` or `mainnet` produces checkout links and transaction links for the right network.
+* **`${VAR}` references**: any config value may be written as an environment reference, resolved at load time. Endpoints whose URL embeds a credential (the RPC provider key, the Discord webhook) are written this way so the secret stays out of the repository. An unset variable fails startup naming the variable, and `CONFIG_PATH` points at a different config file.
 * **Oracle**: `contracts.oracleManager` is optional; without it, `/v1/exchangeRate` responds `503`.
 * **Fee receiver sidecar**: `services.feeReceiver` is the sidecar's `host:port` as a gRPC target, not a URL. Leaving it empty disables `/v1/fee-receivers` with a `503`, the same way an unset `oracleManager` disables exchange rates.
 * **Sweeper / wrapped native**: `contracts.sweeper` and `contracts.wrappedNative` are read only by the sidecar, not by this API. `sweeper` is the contract each fee receiver approves for the fee token; `wrappedNative` is what a native-token payment is approved in.
@@ -676,7 +677,7 @@ Contract addresses, RPC endpoints, checkout/subgraph URLs, and the signer key ar
 * The intermediated platform operator, retrieved via [getIntermediatedPlatformsOperator](core-contracts/paymentprocessorstorage.sol.md#getintermediatedplatformsoperator), controls privileged operations (`createSingleInvoice`, `createMetaInvoice`, `createDispute`).
 * Transaction links are built from the network's configured `urls.explorer` (`https://sepolia.basescan.org` on Base Sepolia).
 * The client-provided `orderId` is hashed to a `uint216` for on-chain storage, producing a numeric string (e.g., `"59808737901387817475691215581034097896123425895641016234844280889"`). That value is the `{invoiceId}` path segment.
-* Blockchain reverts are mapped to human-readable messages, including:
+* Blockchain reverts are mapped to human-readable messages by `revert.Descriptions`, and to HTTP status codes by `revert.StatusCodes`. The map covers every custom error in the generated ABIs, across both processors, `OracleManager`, `Notes`, `PaymentAutomation`, `PaymentProcessorStorage` and `MultiSig`. A few of the ones a caller sees most often:
   * `The buyer and seller addresses cannot be the same.`
   * `The account balance is insufficient to perform this action.`
   * `The provided dispute resolution is invalid.`
