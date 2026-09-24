@@ -54,35 +54,40 @@ Every endpoint requires an `X-API-KEY` header, enforced by `AccessControlMiddleW
 **Request Body**
 
 ```json
-[
-  {
-    "orderId": "550e8400-e29b-41d4-a716-446655440000",
-    "seller": "0x0f447989b14A3f0bbf08808020Ec1a6DE0b8cbC4",
-    "price": 8680000000,
-    "escrowHoldPeriod": 604800,
-    "currency": "USD",
-    "paymentTokens": ["ETH", "USDC"]
-  }
-]
+{
+  "invoices": [
+    {
+      "orderId": "550e8400-e29b-41d4-a716-446655440000",
+      "seller": "0x0f447989b14A3f0bbf08808020Ec1a6DE0b8cbC4",
+      "price": 8680000000,
+      "escrowHoldPeriod": 604800,
+      "currency": "USD"
+    }
+  ],
+  "paymentTokens": ["ETH", "USDC"]
+}
 ```
+
+`invoices` holds one entry per invoice: one creates a single invoice, several create a meta invoice. `paymentTokens` sits beside it and applies to every invoice in the batch.
 
 **Field Details**
 
 | Field              | Type     | Required | Description                                                                            |
 | :----------------: | :------: | :------: | :-------------------------------------------------------------------------------------: |
+| `invoices`         | object\[] | ✅        | The invoices to create. At least one.                                                   |
 | `orderId`          | string   | ✅        | Unique client-side identifier for the invoice (e.g., a UUID or any string).             |
 | `seller`           | string   | ✅        | Ethereum address of the seller. Must not be the zero address.                           |
 | `price`            | number   | ✅        | Invoice price in cents; scaled on the server using the `currency` precision.            |
 | `escrowHoldPeriod` | number   | ✅        | Duration in seconds for holding funds in escrow (e.g., `604800` = 7 days).              |
 | `currency`         | string   | ✅        | Pricing currency; sets the decimal precision applied to `price` (`USD` = 8 decimals).   |
-| `paymentTokens`    | string\[] | ✅        | Token **symbols** the buyer may pay with, e.g. `["ETH", "USDC"]`. At least one.          |
+| `paymentTokens`    | string\[] | ✅        | Token **symbols** the buyer may pay with, e.g. `["ETH", "USDC"]`. At least one. Applies to every invoice in the batch, and sits beside `invoices` rather than inside it. |
 
 **About `paymentTokens`**: callers name tokens by **symbol**, not address. Each symbol is resolved to the address deployed on the selected network using the config's `tokens` table, so the same request body works against local, testnet and mainnet. Matching is case-insensitive (`usdc` resolves `USDC`). `ETH` maps to the zero address, which is how the contracts denote the native token.
 
-`createSingleInvoice`/`createMetaInvoice` take an `address[]` and revert with `NoPaymentTokens` on an empty list, so an empty or missing `paymentTokens` list is rejected with `400`. An unknown symbol is rejected with the list of configured ones:
+`createSingleInvoice`/`createMetaInvoice` take an `address[]` and revert with `NoPaymentTokens` on an empty list, so an empty or missing `paymentTokens` list is rejected with `400`. The list is validated once for the whole batch, so these errors carry no `invoice N:` prefix. An unknown symbol is rejected with the list of configured ones:
 
 ```json
-{ "error": "invoice 0: unknown payment token \"DOGE\" (known: ETH, USDC, wBTC)", "reason": "" }
+{ "error": "unknown payment token \"DOGE\" (known: ETH, USDC, wBTC)", "reason": "" }
 ```
 
 **Response**
@@ -116,11 +121,11 @@ Every endpoint requires an `X-API-KEY` header, enforced by `AccessControlMiddleW
 
 **Error Responses**:
 
-**Error (400)** (malformed JSON, or failed validation such as an invalid seller address, a non-positive price, or a missing `paymentTokens` entry):
+**Error (400)** (malformed JSON, or failed validation such as an invalid seller address, a non-positive price, or a missing `paymentTokens` entry). Per-invoice failures name the offending entry by index; batch-level ones, such as the payment tokens, do not:
 
 ```json
 {
-  "error": "invoice 0: at least one payment token is required",
+  "error": "invoice 0: seller \"0x00\" is not a valid address",
   "reason": "<validation error>"
 }
 ```
@@ -140,16 +145,18 @@ Every endpoint requires an `X-API-KEY` header, enforced by `AccessControlMiddleW
 curl -X POST https://sapphiredaotesting.com/v1/invoices \
 -H "Content-Type: application/json" \
 -H "X-API-KEY: YOUR_API_KEY_HERE" \
--d '[
-  {
-    "orderId": "550e8400-e29b-41d4-a716-446655440000",
-    "seller": "0x0f447989b14A3f0bbf08808020Ec1a6DE0b8cbC4",
-    "price": 8680000000,
-    "escrowHoldPeriod": 604800,
-    "currency": "USD",
-    "paymentTokens": ["ETH", "USDC"]
-  }
-]'
+-d '{
+  "invoices": [
+    {
+      "orderId": "550e8400-e29b-41d4-a716-446655440000",
+      "seller": "0x0f447989b14A3f0bbf08808020Ec1a6DE0b8cbC4",
+      "price": 8680000000,
+      "escrowHoldPeriod": 604800,
+      "currency": "USD"
+    }
+  ],
+  "paymentTokens": ["ETH", "USDC"]
+}'
 ```
 
 ***
