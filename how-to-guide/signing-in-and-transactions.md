@@ -4,7 +4,7 @@ Using the app means signing a few different things along the way. Two are free w
 
 ### Free signatures (no gas)
 
-- **Sign in**: right after you connect your wallet, and again if you switch accounts or after your session expires (12 hours). This lets the app recognize your account, which is required before you can write or open [notes](notes.md).
+- **Sign in**: uses [Sign-In with Ethereum (SIWE)](https://eips.ethereum.org/EIPS/eip-4361), right after you connect your wallet, and again if you switch accounts or after your session expires (12 hours). This lets the app recognize your account, which is required before you can write or open [notes](notes.md).
 - **Unlock notes**: the first time you read or write a note in a tab. This derives the key the app uses to encrypt and decrypt your notes; it stays in that tab's memory only, so you'll sign again in a new tab.
 
 Both just prove you control your wallet. Neither spends gas or grants any spending permission.
