@@ -4,6 +4,8 @@ The MultiSig contract is a multisignature governance contract for privileged pay
 
 Signer management and threshold updates are self-referential: `addSigner`, `removeSigner`, `updateThreshold`, and `cancelTransaction` are only callable by the MultiSig contract itself, so they can only be triggered as the executed result of a transaction proposed and approved against the MultiSig contract, going through the same flow as any other admin call.
 
+The threshold tracks a majority of the current signer set, not a fixed number: `addSigner` and `removeSigner` each resync it to `floor(signerCount / 2) + 1` afterward, emitting `ThresholdUpdated` if that changes it. A threshold set manually via `updateThreshold` only holds until the signer set next changes.
+
 For how an admin actually works through this day to day, see [Manage Admin Transactions](../../how-to-guide/manage-admin-transactions.md).
 
 You can find the full code implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/MultiSig.sol)
@@ -19,14 +21,6 @@ uint8 constant PROPOSED = 1;
 uint8 constant APPROVED = 2;
 uint8 constant EXECUTED = 3;
 uint8 constant CANCELED = 4;
-```
-
-#### MINIMUM\_THRESHOLD
-
-Minimum approval threshold enforced at deployment and on `updateThreshold`.
-
-```solidity
-uint8 constant MINIMUM_THRESHOLD = 2;
 ```
 
 #### MINIMUM\_SIGNERS
@@ -52,7 +46,7 @@ constructor(address[] memory _initialSigners, uint256 _initialThreshold);
 |         Name         |     Type    |                                     Description                                    |
 | :-------------------: | :---------: | :---------------------------------------------------------------------------------: |
 |   `_initialSigners`   | `address[]` |          Array of addresses to register as signers (minimum 2).                     |
-| `_initialThreshold`   |  `uint256`  | Minimum approvals required for execution; must be >= 2 and <= `_initialSigners.length`. |
+| `_initialThreshold`   |  `uint256`  | Minimum approvals required for execution; must be at least a majority of `_initialSigners.length` and no more than that length. |
 
 #### proposeTransaction
 
@@ -126,7 +120,7 @@ function cancelTransaction(bytes32 _txHash) external;
 
 #### addSigner
 
-Adds a new signer to the authorized set. Only callable by the multisig contract itself via an executed transaction.
+Adds a new signer to the authorized set, then resyncs the threshold to a majority of the new signer count. Only callable by the multisig contract itself via an executed transaction.
 
 ```solidity
 function addSigner(address _signer) external;
@@ -140,7 +134,7 @@ function addSigner(address _signer) external;
 
 #### removeSigner
 
-Removes a signer from the authorized set. Only callable by the multisig contract itself via an executed transaction. Reverts if removal would leave fewer signers than the current threshold.
+Removes a signer from the authorized set, then resyncs the threshold to a majority of the new signer count. Only callable by the multisig contract itself via an executed transaction. Reverts if removal would leave fewer than `MINIMUM_SIGNERS`.
 
 ```solidity
 function removeSigner(address _signer) external;
@@ -154,7 +148,7 @@ function removeSigner(address _signer) external;
 
 #### updateThreshold
 
-Updates the minimum approval threshold. Only callable by the multisig contract itself via an executed transaction.
+Updates the minimum approval threshold. Only callable by the multisig contract itself via an executed transaction. The next `addSigner` or `removeSigner` resyncs the threshold to a majority of the signer count at that time, overriding whatever this call set.
 
 ```solidity
 function updateThreshold(uint256 _newThreshold) external;
@@ -164,7 +158,7 @@ function updateThreshold(uint256 _newThreshold) external;
 
 |      Name       |   Type    |                              Description                             |
 | :--------------: | :-------: | :---------------------------------------------------------------------: |
-| `_newThreshold`  | `uint256` | New required approval count; must be >= `MINIMUM_THRESHOLD` and <= signer count. |
+| `_newThreshold`  | `uint256` | New required approval count; must be at least a majority of the current signer count and no more than that count. |
 
 #### getTransaction
 
@@ -381,9 +375,9 @@ event ThresholdUpdated(uint256 oldThreshold, uint256 newThreshold);
 | `AlreadyExecuted()` | Thrown when the transaction has already been executed. |
 | `ThresholdCannotBeZero()` | Thrown when a threshold update of zero is attempted. |
 | `ExecutionFailed()` | Thrown when the low-level call to the payment processor fails. |
-| `InvalidThreshold()` | Thrown when a provided threshold is zero, exceeds signer count, or is otherwise invalid. |
+| `InvalidThreshold()` | Thrown when a provided threshold is below a majority of the signer count, exceeds it, or is otherwise invalid. |
 | `InvalidTarget()` | Thrown when the target address is the zero address. |
-| `SignerCountBelowThreshold()` | Thrown when removing a signer would bring the signer count below the current threshold, or when a new threshold exceeds the signer count. |
+| `SignerCountBelowThreshold()` | Thrown when `updateThreshold` is given a new threshold above the current signer count. |
 | `AlreadyASigner()` | Thrown when the provided address is already a registered signer. |
 | `NotASigner()` | Thrown when the provided address is not a registered signer. |
-| `InsufficientSigners()` | Thrown when the initial signer array has fewer than two entries. |
+| `InsufficientSigners()` | Thrown when the initial signer array has fewer than `MINIMUM_SIGNERS` entries, or when removing a signer would leave fewer than that. |

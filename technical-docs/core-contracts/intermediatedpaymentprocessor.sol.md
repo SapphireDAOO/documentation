@@ -97,12 +97,20 @@ Dispute has been settled with a split payout.
 uint8 constant DISPUTE_SETTLED = 8;
 ```
 
+#### DISPUTE\_EXPIRED
+
+Dispute lapsed without a resolution; the invoice is releasable again.
+
+```solidity
+uint8 constant DISPUTE_EXPIRED = 9;
+```
+
 #### RELEASED
 
 Payment has been released to the seller after acceptance or resolution.
 
 ```solidity
-uint8 constant RELEASED = 9;
+uint8 constant RELEASED = 10;
 ```
 
 #### BASIS\_POINTS
@@ -321,9 +329,9 @@ function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerSha
 
 #### release
 
-Releases escrowed funds to the seller after the release window has passed.
+Releases escrowed funds to the seller.
 
-Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state once `releaseAt` has been reached (reverts `InvalidInvoiceState` otherwise). Platform fees are deducted before the net amount is transferred to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global fee rate, so a later change to the global rate never affects an already-created invoice. The fee is paid to the fee receiver authorized when the invoice was paid (`feeReceiver`), including sub-invoices paid through a meta-invoice, each of which carries its own; the fallback to [`PaymentProcessorStorage`'s global fee receiver](paymentprocessorstorage.sol.md#fee_receiver) only covers invoices paid before per-invoice receivers existed. The seller is paid in the invoice's payment token. The fee is paid in that token too when the escrow holds an ERC20; when the escrow holds native currency the fee is pulled out, wrapped into the WETH contract [configured on `PaymentProcessorStorage`](paymentprocessorstorage.sol.md#weth), and sent on as WETH, so a receiver that rejects native transfers is still paid. The invoice transitions to RELEASED and its balance is zeroed. There is no heap; this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
+Callable only by the intermediated platform. Valid for invoices in the PAID, DISPUTE\_RESOLVED, DISPUTE\_DISMISSED, or DISPUTE\_EXPIRED state (reverts `InvalidInvoiceState` otherwise). `releaseAt` is recorded on the invoice but not enforced here; the operator decides when to release, and [setInvoiceReleaseTime](#setinvoicereleasetime) no longer affects whether a release is allowed. Platform fees are deducted before the net amount is transferred to the seller, using the fee rate captured on the invoice at creation (`feeRate`), not the current global fee rate, so a later change to the global rate never affects an already-created invoice. The fee is paid to the fee receiver authorized when the invoice was paid (`feeReceiver`), including sub-invoices paid through a meta-invoice, each of which carries its own; the fallback to [`PaymentProcessorStorage`'s global fee receiver](paymentprocessorstorage.sol.md#fee_receiver) only covers invoices paid before per-invoice receivers existed. The seller is paid in the invoice's payment token. The fee is paid in that token too when the escrow holds an ERC20; when the escrow holds native currency the fee is pulled out, wrapped into the WETH contract [configured on `PaymentProcessorStorage`](paymentprocessorstorage.sol.md#weth), and sent on as WETH, so a receiver that rejects native transfers is still paid. The invoice transitions to RELEASED and its balance is zeroed. There is no heap; this is always a direct, manually-triggered release. If the fee transfer itself fails, it does not revert the release; a `TransferFailed` event is emitted instead.
 
 ```solidity
 function release(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator whenNotPaused;
@@ -370,10 +378,26 @@ function cancelInvoice(uint216 _invoiceId) public onlyIntermediatedPlatformsOper
 
 Finalizes a dispute and marks the invoice as resolved.
 
-Callable only by the intermediated platform after a dispute has been raised by the buyer. This function is used when both parties (buyer and seller) have come to an agreement without requiring arbitration, or when the dispute period has expired with no further action. Transitions the invoice state from DISPUTED to DISPUTE\_RESOLVED.
+Callable only by the intermediated platform after a dispute has been raised by the buyer. Used when both parties (buyer and seller) have come to an agreement without requiring arbitration. Reverts `InvalidInvoiceState` unless the invoice is DISPUTED. Transitions the invoice state from DISPUTED to DISPUTE\_RESOLVED.
 
 ```solidity
 function resolveDispute(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator;
+```
+
+**Parameters**
+
+|     Name     |    Type   |                   Description                  |
+| :----------: | :-------: | :--------------------------------------------: |
+| `_invoiceId` | `uint216` | The unique identifier of the disputed invoice. |
+
+#### expireDispute
+
+Marks a dispute as expired after it lapsed without a resolution.
+
+Callable only by the intermediated platform. Reverts `InvalidInvoiceState` unless the invoice is DISPUTED. Transitions the invoice state from DISPUTED to DISPUTE\_EXPIRED, after which the invoice is releasable again. No funds move.
+
+```solidity
+function expireDispute(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator;
 ```
 
 **Parameters**
@@ -386,7 +410,7 @@ function resolveDispute(uint216 _invoiceId) external onlyIntermediatedPlatformsO
 
 Sets a custom release time for a given invoice by adding a hold period to the current timestamp.
 
-Callable only by the owner. Valid for invoices in the PAID, DISPUTE\_RESOLVED, or DISPUTE\_DISMISSED state.
+Callable only by the owner. Valid for invoices in the PAID, DISPUTE\_RESOLVED, DISPUTE\_DISMISSED, or DISPUTE\_EXPIRED state.
 
 ```solidity
 function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external onlyOwner;
@@ -591,7 +615,7 @@ struct Invoice {
 |     `invoiceNonce`     | `uint216` |                                  A unique identifier assigned to this invoice, typically sequentially.                                 |
 |         `paidAt`       |  `uint40` |                                            Timestamp when the payment was made.                                          |
 |       `createdAt`      |  `uint40` |                                            Timestamp when the invoice was created.                                       |
-|       `releaseAt`      |  `uint40` |                                The timestamp when funds in escrow can be released to the seller.                         |
+|       `releaseAt`      |  `uint40` |                                The timestamp derived from `holdPeriod` when the invoice was paid. Recorded for reference; [release](#release) does not check it.                         |
 |       `expiresAt`      |  `uint40` |                                     The timestamp after which the invoice is no longer payable.                          |
 |         `state`        |  `uint8`  |                                                 Current state of the invoice.                                            |
 |  `withdrawalRetries`   |  `uint8`  | Reserved retry counter retained for storage-layout compatibility; unused now that releases are manual. Packed with `state`. |
@@ -649,16 +673,33 @@ struct InvoiceCreationParam {
 
 #### InvoiceCreated
 
-Emitted when a new invoice is created.
+Emitted when a new invoice is created. Carries only the fields set at creation; payment, escrow, and release data arrive with later events.
 
 ```solidity
-event InvoiceCreated(uint216 indexed invoiceId, Invoice invoice);
+event InvoiceCreated(
+    uint216 indexed invoiceId,
+    address indexed seller,
+    uint216 indexed metaInvoiceId,
+    string orderId,
+    uint216 invoiceNonce,
+    uint256 price,
+    uint40 expiresAt,
+    uint32 holdPeriod,
+    uint16 feeRate
+);
 ```
 
-| Name        | Type      | Description                        |
-| :----------: | :-------: | :---------------------------------: |
-| `invoiceId` | `uint216` | The ID of the newly created invoice. |
-| `invoice`   | `Invoice` | The invoice data.                  |
+|      Name       |   Type    |                                  Description                                   |
+| :--------------: | :-------: | :------------------------------------------------------------------------------: |
+|   `invoiceId`    | `uint216` |                        The ID of the newly created invoice.                        |
+|    `seller`      | `address` |                                 The address of the seller.                                 |
+| `metaInvoiceId`  | `uint216` |            The meta-invoice this invoice belongs to, or 0 for a standalone invoice.           |
+|    `orderId`     |  `string` |         The caller-supplied order identifier the invoice ID was derived from.         |
+|  `invoiceNonce`  | `uint216` |                            The nonce assigned to the invoice.                            |
+|     `price`      | `uint256` |                     The invoice amount expressed in USD (8 decimals).                     |
+|   `expiresAt`    | `uint40`  |              The timestamp after which the invoice is no longer payable.              |
+|   `holdPeriod`   | `uint32`  |            Seconds the escrow holds the payment after it is paid.            |
+|    `feeRate`     | `uint16`  |      The platform fee rate (in basis points) captured for this invoice.      |
 
 #### MetaInvoiceCreated
 
@@ -693,6 +734,7 @@ Emitted when an invoice is successfully paid and an escrow contract is created.
 ```solidity
 event InvoicePaid(
     uint216 indexed invoiceId,
+    address indexed payer,
     address paymentToken,
     address escrowAddress,
     uint256 amount,
@@ -704,10 +746,11 @@ event InvoicePaid(
 | Name            | Type      | Description                                                              |
 | :--------------: | :-------: | :-----------------------------------------------------------------------: |
 | `invoiceId`     | `uint216` | The unique identifier of the paid invoice.                               |
+| `payer`         | `address` | The address that paid, recorded as the invoice's buyer.                 |
 | `paymentToken`  | `address` | The address of the token used for payment (address(0) for native ETH).   |
 | `escrowAddress` | `address` | The address of the escrow contract created to hold the payment.          |
 | `amount`        | `uint256` | The amount paid, denominated in the token's smallest unit.               |
-| `releaseAt`     | `uint40`  | The UNIX timestamp when the escrowed funds become releasable.            |
+| `releaseAt`     | `uint40`  | The UNIX timestamp derived from `holdPeriod`, recorded for reference; [release](#release) does not check it.            |
 | `feeReceiver`   | `address` | The address recorded to be paid this invoice's platform fee, including for a sub-invoice paid through a meta-invoice. |
 
 #### PaymentReleased
@@ -781,6 +824,18 @@ Emitted when a dispute is resolved in the seller's favor via `resolveDispute`.
 
 ```solidity
 event DisputeResolved(uint216 indexed invoiceId);
+```
+
+| Name        | Type      | Description                                    |
+| :----------: | :-------: | :---------------------------------------------: |
+| `invoiceId` | `uint216` | The ID of the invoice involved in the dispute. |
+
+#### DisputeExpired
+
+Emitted when a dispute lapses without a resolution via `expireDispute`. The invoice transitions to DISPUTE\_EXPIRED and becomes releasable; no funds move.
+
+```solidity
+event DisputeExpired(uint216 indexed invoiceId);
 ```
 
 | Name        | Type      | Description                                    |

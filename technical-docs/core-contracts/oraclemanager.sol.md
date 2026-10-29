@@ -32,6 +32,14 @@ Default number of decimals used for internal fixed-point arithmetic (e.g., 1e18 
 uint8 public constant DEFAULT_DECIMAL = 18
 ```
 
+#### FEED_DECIMAL
+
+Decimals every Chainlink USD feed used here reports its answer in. Used by [getValueInCurrency](#getvalueincurrency) to combine a token's USD feed with a caller-supplied currency feed.
+
+```solidity
+uint8 public constant FEED_DECIMAL = 8
+```
+
 #### SEQUENCER_GRACE_PERIOD
 
 Minimum time (in seconds) to wait after the L2 sequencer restarts before trusting price data. Protects against stale prices that accumulated while the sequencer was offline.
@@ -78,6 +86,33 @@ function getUsdPerToken(address _paymentToken) external view returns (uint256);
 | Name |   Type    |                                  Description                                   |
 | :--: | :-------: | :----------------------------------------------------------------------------: |
 |      | `uint256` | The token's USD price with 8 decimals as returned by the Chainlink aggregator. |
+
+#### getValueInCurrency
+
+Converts an amount of a payment token into a target currency, via USD.
+
+Prices `_paymentToken` with its registered feed, then divides by `_toAggregator`'s rate. `_toAggregator` is taken as given: unlike a registered price feed, it carries no `allowed` flag and no heartbeat, and only round completeness and a positive answer are checked (reverts `StalePrice` or `InvalidPrice` otherwise). Callers must therefore supply an aggregator they trust; treat the result as informational rather than as a basis for moving funds. Both feeds are assumed to report `FEED_DECIMAL` decimals, as Chainlink USD pairs do. Reverts with `InvalidAggregator` if `_toAggregator` is the zero address.
+
+```solidity
+function getValueInCurrency(address _paymentToken, uint256 _amount, address _toAggregator)
+    external
+    view
+    returns (uint256 value);
+```
+
+**Parameters**
+
+|       Name       |   Type    |                                  Description                                  |
+| :---------------: | :-------: | :-----------------------------------------------------------------------------: |
+|  `_paymentToken`  | `address` |          The token being converted; `address(0)` for native currency.          |
+|     `_amount`     | `uint256` |            The amount of `_paymentToken`, in that token's own decimals.         |
+|  `_toAggregator`  | `address` |      Aggregator quoting USD per unit of the target currency (e.g. EUR/USD).    |
+
+**Returns**
+
+|  Name   |   Type    |                     Description                     |
+| :-----: | :-------: | :----------------------------------------------------: |
+| `value` | `uint256` | The converted amount, with `FEED_DECIMAL` decimals. |
 
 #### getUsdPerTokenBatch
 
@@ -186,3 +221,4 @@ event PriceFeedSet(address indexed token, address indexed aggregator, uint96 hea
 |  `SequencerDown()`   | Thrown when the L2 sequencer is down or still within the post-restart grace period. |
 |  `StalePriceFeed()`  |      Thrown when the price feed update is older than the configured heartbeat.      |
 |   `InvalidPrice()`   |       Thrown when the Chainlink price feed returns a zero or negative answer.       |
+| `InvalidAggregator()` |        Thrown when the zero address is supplied as the target currency aggregator.        |

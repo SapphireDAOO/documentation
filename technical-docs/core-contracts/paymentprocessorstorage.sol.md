@@ -2,7 +2,7 @@
 
 The PaymentProcessorStorage Solidity smart contract serves as the core state and configuration layer for the SapphireDao platform. It manages invoice ID sequencing, fee parameters, and access permissions. Other contracts, such as [SimplePaymentProcessor.sol](simplepaymentprocessor.sol.md) and [IntermediatedPaymentProcessor.sol](intermediatedpaymentprocessor.sol.md), rely on it for global settings and controlled state updates.
 
-Contract Address: [0xa5a8d53D9138D17F6C94c56846D50a850aFd14c9](https://sepolia.basescan.org/address/0xa5a8d53D9138D17F6C94c56846D50a850aFd14c9)
+Contract Address: [0x58422C5A8959502a2304b2AfF97dAebF30262CA6](https://sepolia.basescan.org/address/0x58422C5A8959502a2304b2AfF97dAebF30262CA6)
 
 You can find the full implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/v2/src/PaymentProcessorStorage.sol)
 
@@ -160,10 +160,10 @@ function pause() external onlyOwner;
 
 Lifts a pause and clears any unresolved emergency pause.
 
-Only callable by the contract owner. Reverts with `NotPaused` if neither an owner pause nor an emergency pause is active.
+Callable by the owner, or by the emergency pauser to lift its own emergency pause; reverts with `Unauthorized` (from solady's `Ownable`, not declared here) for anyone else. The pauser cannot lift an owner pause: if the owner has approved the pause (or set one directly), only the owner can unpause, so reverts with `NotAuthorized`. Reverts with `NotPaused` if neither an owner pause nor an emergency pause is active.
 
 ```solidity
-function unpause() external onlyOwner;
+function unpause() external;
 ```
 
 #### emergencyPause
@@ -245,6 +245,21 @@ function getEmergencyPauseExpiry() external view returns (uint256 expiry);
 |   Name   |   Type    |                          Description                           |
 | :------: | :-------: | :------------------------------------------------------------: |
 | `expiry` | `uint256` | The expiry timestamp, or 0 when no emergency pause is pending. |
+
+#### getPauseState
+
+Returns the pause state and the emergency pause expiry together, read from one call so a caller cannot see them at different blocks.
+
+```solidity
+function getPauseState() external view returns (bool pausedState, uint256 expiry);
+```
+
+**Returns**
+
+|     Name      |   Type    |                                             Description                                              |
+| :-----------: | :-------: | :-----------------------------------------------------------------------------------------------------: |
+| `pausedState` |  `bool`   |                    True for an owner pause, or an emergency pause that has not yet expired.                    |
+|   `expiry`    | `uint256` | The emergency pause expiry timestamp, or 0 when none is pending. Non-zero with `pausedState` false means the pause lapsed without being approved or lifted. |
 
 #### getNextInvoiceNonce
 

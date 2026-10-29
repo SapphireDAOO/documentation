@@ -2,7 +2,7 @@
 
 The payment processor Solidity smart contract is the main user interface contract. Most users will interact with the SapphireDao platform via the `SimplePaymentProcessor.sol` contract. It shows invoice creation, management, payments, and escrow functionality on the blockchain.
 
-Contract Address: [0x0741D5d919900c216Db4184e2cA0aaE6f88f21C3](https://sepolia.basescan.org/address/0x0741D5d919900c216Db4184e2cA0aaE6f88f21C3)
+Contract Address: [0xbCd3f9AB4e0b09044053102A353C0B710106e08a](https://sepolia.basescan.org/address/0xbCd3f9AB4e0b09044053102A353C0B710106e08a)
 
 You can find the full implementation [here](https://github.com/SapphireDAOO/payment-processor/blob/main/src/SimplePaymentProcessor.sol)
 
@@ -463,16 +463,27 @@ struct Invoice {
 
 #### InvoiceCreated
 
-Emitted when a new invoice is created.
+Emitted when a new invoice is created. Carries only the fields set at creation; buyer, escrow, and release data arrive with later events.
 
 ```solidity
-event InvoiceCreated(uint216 indexed invoiceId, Invoice invoice);
+event InvoiceCreated(
+    uint216 indexed invoiceId,
+    address indexed seller,
+    uint216 invoiceNonce,
+    uint256 price,
+    uint40 expiresAt,
+    uint16 feeRate
+);
 ```
 
-|    Name     |   Type    |                                    Description                                    |
-| :---------: | :-------: | :-------------------------------------------------------------------------------: |
-| `invoiceId` | `uint216` |                  The unique identifier for the created invoice.                   |
-|  `invoice`  | `Invoice` | The full invoice struct containing buyer, price, timestamps, state, and metadata. |
+|     Name      |   Type    |                             Description                              |
+| :-----------: | :-------: | :--------------------------------------------------------------------: |
+|  `invoiceId`  | `uint216` |                  The unique identifier for the created invoice.                   |
+|   `seller`    | `address` |              The address of the seller who created the invoice.              |
+| `invoiceNonce` | `uint216` |                       The nonce assigned to the invoice.                       |
+|    `price`    | `uint256` |                       The price of the invoice in wei.                        |
+|  `expiresAt`  | `uint40`  |       The timestamp after which the invoice is no longer payable.        |
+|   `feeRate`   | `uint16`  | The platform fee rate (in basis points) captured for this invoice. |
 
 #### InvoicePaid
 

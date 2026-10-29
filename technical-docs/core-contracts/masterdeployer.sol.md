@@ -206,7 +206,7 @@ function deployCore(Params calldata _params, CoreInitCodes calldata _initCodes)
 
 Second deployment phase: `OracleManager`, `IntermediatedPaymentProcessor`, `Sweeper`, `Notes`, and finally `PaymentProcessorStorage` at its predicted address with both processors authorized.
 
-Callable once, by `DEPLOYER` only, and only after [deployCore](#deploycore) (reverts with `CoreNotDeployed` if `multiSig` is unset; reverts with `AlreadyDeployed` if `ppStorage` is already set). `Sweeper` takes only the predicted `PaymentProcessorStorage` address as its constructor argument. `Notes` is authorized to name `SimplePaymentProcessor`, `IntermediatedPaymentProcessor`, and `DEPLOYER` (the deployer also gets write access, so it can attach post-deploy notes; `PaymentProcessorStorage` deliberately does not); reverts with `AddressMismatch` if the deployed `Notes` address doesn't match the prediction from `deployCore`. The pending-authorized list is then reset to just the two processors for `PaymentProcessorStorage`'s own authorization, and deleted once that deployment completes, so `authorizedAddresses()` only ever returns a non-empty list during this call (`Sweeper` is never added to it; it authorizes callers by checking `PaymentProcessorStorage`'s owner directly, not the `onlyAuthorized` allowlist). Reverts with `StorageAddressMismatch` if the deployed storage address doesn't match the prediction. Ownership of the storage contract is left with `_params.config.owner`; post-deploy wiring (setting the fee signer, price feeds, ownership transfer to the `MultiSig`) is the deployer's responsibility, not something this function does. Emits `SystemDeployed`.
+Callable once, by `DEPLOYER` only, and only after [deployCore](#deploycore) (reverts with `CoreNotDeployed` if `multiSig` is unset; reverts with `AlreadyDeployed` if `ppStorage` is already set). `OracleManager` is deployed only when `_params.oracleManager` is `address(0)`; otherwise that existing manager is reused as-is, with its price feeds and admin unchanged, and `_initCodes.oracleManager` may be left empty. `Sweeper` takes only the predicted `PaymentProcessorStorage` address as its constructor argument. `Notes` is authorized to name `SimplePaymentProcessor`, `IntermediatedPaymentProcessor`, and `DEPLOYER` (the deployer also gets write access, so it can attach post-deploy notes; `PaymentProcessorStorage` deliberately does not); reverts with `AddressMismatch` if the deployed `Notes` address doesn't match the prediction from `deployCore`. The pending-authorized list is then reset to just the two processors for `PaymentProcessorStorage`'s own authorization, and deleted once that deployment completes, so `authorizedAddresses()` only ever returns a non-empty list during this call (`Sweeper` is never added to it; it authorizes callers by checking `PaymentProcessorStorage`'s owner directly, not the `onlyAuthorized` allowlist). Reverts with `StorageAddressMismatch` if the deployed storage address doesn't match the prediction. Ownership of the storage contract is left with `_params.config.owner`; post-deploy wiring (setting the fee signer, price feeds, ownership transfer to the `MultiSig`) is the deployer's responsibility, not something this function does. Emits `SystemDeployed`.
 
 ```solidity
 function deploySystem(Params calldata _params, SystemInitCodes calldata _initCodes)
@@ -239,6 +239,7 @@ struct Params {
     IPaymentProcessorStorage.Configuration config;
     uint32 escrowHoldPeriod;
     address sequencerUptimeFeed;
+    address oracleManager;
     address forwarder;
     address workflowOwner;
     address[] multiSigSigners;
@@ -251,7 +252,8 @@ struct Params {
 |          `salt`          |                     `bytes32`                     |               The CREATE2 salt used for every deployment.                |
 |         `config`         | `IPaymentProcessorStorage.Configuration` |         The initial `PaymentProcessorStorage` configuration.          |
 |    `escrowHoldPeriod`    |                     `uint32`                       | Seconds a `SimplePaymentProcessor` escrow holds a payment before release. Fixed on the processor at deployment; must be non-zero. |
-| `sequencerUptimeFeed`   |                     `address`                      | Chainlink sequencer uptime feed; `address(0)` disables the check. |
+| `sequencerUptimeFeed`   |                     `address`                      | Chainlink sequencer uptime feed; `address(0)` disables the check. Unused when `oracleManager` is set, since the existing manager keeps its own. |
+|      `oracleManager`     |                     `address`                      | An already-deployed `OracleManager` for `IntermediatedPaymentProcessor` to price against; `address(0)` deploys a new one. |
 |       `forwarder`        |                     `address`                      | CRE forwarder allowed to deliver reports to `PaymentAutomation`. |
 |     `workflowOwner`      |                     `address`                      | CRE workflow owner carried in report metadata. |
 |    `multiSigSigners`    |                    `address[]`                     |                     Initial `MultiSig` signers.                       |
@@ -297,7 +299,7 @@ struct SystemInitCodes {
 
 |              Field              |  Type   |                    Description                   |
 | :---------------------------------: | :-----: | :----------------------------------------------------: |
-|          `oracleManager`          | `bytes` |          `OracleManager` creation code.           |
+|          `oracleManager`          | `bytes` |          `OracleManager` creation code. Ignored, and may be empty, when `Params.oracleManager` names an existing manager.           |
 | `intermediatedPaymentProcessor` | `bytes` | `IntermediatedPaymentProcessor` creation code. |
 |             `sweeper`             | `bytes` |              `Sweeper` creation code.             |
 |              `notes`              | `bytes` |               `Notes` creation code. Must match the one passed to `deployCore`, otherwise `Notes` lands away from the predicted address and the call reverts with `AddressMismatch`.               |

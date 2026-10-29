@@ -10,7 +10,7 @@ Notes.sol enables:
 - Allowlist-based write access, fixed at deployment
 - Write-once public key registration, so others know which key to encrypt notes to
 
-Contract Address: [0xE818dA06Ceed4Ac6c6d4871a5Fc0226B8032834e](https://sepolia.basescan.org/address/0xE818dA06Ceed4Ac6c6d4871a5Fc0226B8032834e)
+Contract Address: [0x934fa7109ff129Cb70997B6be330401fa5946671](https://sepolia.basescan.org/address/0x934fa7109ff129Cb70997B6be330401fa5946671)
 
 You can find the full code implementation [here](http://github.com/SapphireDAOO/payment-processor/blob/main/src/Notes.sol)
 
