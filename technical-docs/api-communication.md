@@ -100,7 +100,7 @@ The invoice endpoints that send transactions (create, release, cancel, refund, a
 
 ```json
 {
-  "url": "https://sapphire-dao-website.pages.dev/checkout/?id=kWMRqBU-7H64tqp04CM5IfzKRMP1DbH2Ytg5",
+  "url": "https://app.sapphiredaotesting.com/checkout/?id=kWMRqBU-7H64tqp04CM5IfzKRMP1DbH2Ytg5",
   "invoices": {
     "550e8400-e29b-41d4-a716-446655440000": {
       "seller": "0x329C3E1bEa46Abc22F307eE30Cbb522B82Fe7082",
@@ -346,6 +346,7 @@ curl -X POST https://sapphiredaotesting.com/v1/invoices/598087379013878174756912
 | `1`   | ResolveDispute | Both buyer and seller agree to dismiss the dispute, with escrow allocation unchanged (fully to seller)   | `resolveDispute`                          |
 | `2`   | DismissDispute | Arbitrator dismisses the dispute, leaving escrow allocation unchanged (fully to seller)                  | `handleDispute` with `DISPUTE_DISMISSED`  |
 | `3`   | SettleDispute  | Dispute resolved by an arbitrator, with `sellerShare` to the seller and the rest to the buyer            | `handleDispute` with `DISPUTE_SETTLED`    |
+| `4`   | ExpireDispute  | The dispute lapsed without a resolution; no funds move and the invoice becomes releasable again          | `expireDispute`                          |
 
 Any other value is refused with `500` (`unsupported marketplace action`).
 
@@ -355,6 +356,7 @@ Any other value is refused with `500` (`unsupported marketplace action`).
 * For `SettleDispute`, funds are distributed with platform fees applied, emitting `DisputeSettled`.
 * For `DismissDispute`, emits `DisputeDismissed` without fund distribution.
 * For `ResolveDispute`, emits `DisputeResolved` and sets the state to `DISPUTE_RESOLVED`.
+* For `ExpireDispute`, emits `DisputeExpired` and sets the state to `DISPUTE_EXPIRED`, from which the invoice can be released.
 
 **Success (200)**:
 
@@ -711,7 +713,7 @@ Contract addresses, RPC endpoints, checkout/subgraph URLs, and the signer key ar
 
 * Which endpoints need `X-API-KEY`, a session token, or nothing is described under each endpoint above and in the summary after the table.
 * Invoice states differ by processor, and `0` always means the id was never created:
-  * **Intermediated**: `CREATED` (1), `PAID` (2), `REFUNDED` (3), `CANCELED` (4), `DISPUTED` (5), `DISPUTE_RESOLVED` (6), `DISPUTE_DISMISSED` (7), `DISPUTE_SETTLED` (8), `RELEASED` (9).
+  * **Intermediated**: `CREATED` (1), `PAID` (2), `REFUNDED` (3), `CANCELED` (4), `DISPUTED` (5), `DISPUTE_RESOLVED` (6), `DISPUTE_DISMISSED` (7), `DISPUTE_SETTLED` (8), `DISPUTE_EXPIRED` (9), `RELEASED` (10), `LOCKED` (11).
   * **Simple**: `CREATED` (1), `PAID` (2), `ACCEPTED` (3), `REJECTED` (4), `CANCELED` (5), `REFUNDED` (6), `RELEASED` (7), `BURNED` (8).
 * The contracts use Chainlink price feeds (`AggregatorV3Interface`) for USD-to-token conversions, supporting the native token and ERC20 tokens.
 * The intermediated platform operator, retrieved via [getIntermediatedPlatformsOperator](core-contracts/paymentprocessorstorage.sol.md#getintermediatedplatformsoperator), controls privileged operations (`createSingleInvoice`, `createMetaInvoice`, `createDispute`).
